@@ -1,5 +1,22 @@
 # FlowInk Dashboard — Design & Build Plan
 
+> **Historical design document — not current-state documentation.** This
+> is the build plan an earlier session wrote and executed for the
+> dashboard's visual redesign (phases D0–D5, all shipped). It is kept for
+> provenance, not as something a new user or deployer needs to read. For
+> what the dashboard actually does today, see
+> [`docs/architecture.md`](../architecture.md) §8–9 (generic card
+> rendering, optional-integration degradation, manual entry) and
+> [`docs/reference-example-sg.md`](../reference-example-sg.md) (the
+> Singapore-specific `/cards/tier-3` route this plan describes building).
+> Two of this document's own citations no longer exist under the names
+> used below: `docs/cardledger-build-spec.md` was split into
+> `docs/architecture.md` and `docs/reference-example-sg.md`, and
+> `docs/SETUP_STATUS.md` (a live-deployment operational handover) was
+> retired — its durable content was folded into `docs/architecture.md`
+> and the `docs/setup/*.md` guides. Left unedited below as the historical
+> record of what those citations pointed to at the time this was written.
+
 Companion to `docs/cardledger-build-spec.md` §10 (as amended 2026-08-25) and
 `docs/SETUP_STATUS.md`. Covers what goes on top of the existing Next.js
 scaffold in `dashboard/`: visual direction, information architecture, the

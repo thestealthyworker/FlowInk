@@ -1,76 +1,119 @@
 # FlowInk
 
-Personal credit card spend tracking and threshold optimisation. Singapore.
-UOB One, Citi Cash Back, HSBC Revolution, DBS PayLah.
+A self-hosted personal finance tracker that consolidates every card and
+wallet you have into one ledger, then tracks each card's own reward
+thresholds and caps so you actually earn what you're entitled to instead
+of missing it by a few dollars or one transaction.
 
-Full design: [`docs/cardledger-build-spec.md`](docs/cardledger-build-spec.md).
+Every card and wallet already has its own analytics, locked inside its
+own app. Nothing shows total spend, and nothing tells you — in the
+statement month you're still inside, not five weeks later — whether
+you're on track for a threshold you're about to miss. FlowInk exists to
+be that one view.
 
-**Standalone. No VPS, no n8n, no always-on server.** Everything runs either
-inside Supabase or in a GitHub Actions runner.
+Card rules (rates, tiers, caps) live in the database as data, not code —
+a rate change is an `UPDATE`, not a deploy. That's what lets this repo
+ship generically: the schema and rules engine don't know or care which
+country your cards are from. It ships with a complete worked example for
+four Singapore cards and wallets, encoded as a demonstration of the
+pattern, not as the limit of what it supports.
 
-## Architecture
+**Standalone.** No VPS, no always-on server, no third-party automation
+platform. Everything runs either inside Supabase (a hosted Postgres
+provider) or in a GitHub Actions runner, both of which have usable free
+tiers.
+
+## Architecture, in brief
 
 ```
-LAYER 1 · LIVE       Supabase Cron (2 min) → Edge Function ingest-alerts
+LAYER 1 · LIVE       Supabase Cron → Edge Function ingest-alerts
                       → Gmail API → Anthropic API → Supabase (provisional)
 LAYER 2 · RECONCILE  GitHub Actions (daily) → decrypt statement PDF (qpdf)
                       → parse → match provisional → confirmed
 LAYER 3 · RULES      Postgres functions. Deterministic. No LLM.
-LAYER 4 · OUT        Web dashboard (Phase 5, not yet built) · healthchecks.io
-                      dead-man's-switch (heartbeat, JOB-6)
+LAYER 4 · OUT        Web dashboard (Vercel) · healthchecks.io
+                      dead-man's-switch
 ```
 
-Telegram was removed 2026-08-25 (operator decision, `docs/cardledger-build-spec.md`
-§10 AMENDMENT). Warnings and merchant triage move to the web dashboard;
-**healthchecks.io is now the only out-of-band alarm** — see `heartbeat` below
-and `supabase/functions/_shared/healthchecks.ts`.
+**Only layer 1 (Supabase) and the dashboard half of layer 4 are
+required.** Everything else — Gmail-based ingestion, the Anthropic
+parsing that turns a raw alert email into a transaction, statement-PDF
+reconciliation, healthchecks.io monitoring — is optional and layered on
+top. Skip all of it and you have a personal finance tracker with manual
+transaction entry: a fully supported way to use this, not a degraded
+stopgap. The dashboard detects which integrations are actually
+configured and degrades honestly — a banner explaining what's missing,
+never a crash or a silent gap — rather than assuming everything is wired
+up.
+
+The full architecture — data model, the rules engine's generic
+self-describing contract, the ingestion design, the security model and
+the traps this project has already hit building it — is in
+[`docs/architecture.md`](docs/architecture.md). The Singapore worked
+example (UOB One, HSBC Revolution, Citi Cash Back, DBS PayLah! — real
+reward mechanics, MCC codes, T&C citations) is in
+[`docs/reference-example-sg.md`](docs/reference-example-sg.md).
+
+## What it costs to run
+
+Every piece below has a usable free tier for a single-user deployment:
+
+- **Supabase** — free, with one real caveat: a free-tier project pauses
+  itself after roughly a week of inactivity, which silently stops every
+  scheduled job. A few dollars a month on a paid tier removes that
+  failure mode; see [`docs/setup/supabase.md`](docs/setup/supabase.md).
+- **Vercel** (dashboard hosting) — free (Hobby tier) for personal,
+  non-commercial use.
+- **Anthropic** — pay-as-you-go, but at personal transaction volumes
+  (tens to low hundreds of transactions a month, parsed by a small, cheap
+  model) this is a rounding error, not a line item worth budgeting
+  around.
+- **healthchecks.io** — free tier is enough for one dead-man's-switch and
+  a handful of per-source checks.
+- **Google Cloud** (Gmail API access) — free; no billing account
+  required for this project's usage.
+
+## Before you start
+
+You'll need to be comfortable with `git clone`, `npm install`, and
+pasting commands into a terminal, and to click through several web
+consoles (Supabase, Google Cloud, Vercel) as you go — every step that
+requires one tells you exactly what to click. You do not need your own
+server, domain, or any infrastructure beyond the free-tier accounts
+above.
+
+## Get started
+
+**[`docs/getting-started.md`](docs/getting-started.md)** is the entry
+point: what to set up, in what order, and why — including which pieces
+are required and which are optional, with an honest account of what you
+lose by skipping each optional one.
 
 ## Repo layout
 
 ```
 supabase/migrations/         schema + seed data, versioned
 supabase/functions/
-  ingest-alerts/              JOB-1 · Gmail alert → Anthropic → provisional txn
-  heartbeat/                  JOB-6 · hourly healthchecks.io ping + per-source silence check
+  ingest-alerts/              Gmail alert → Anthropic → provisional transaction
+  heartbeat/                  hourly healthchecks.io ping + per-source silence check
   _shared/                    gmail, anthropic, healthchecks, period, merchant, supabase, cron-auth
 .github/workflows/
-  ingest-statements.yml       JOB-2 · daily, decrypts + parses statement PDFs
-  reconcile.yml                JOB-3 · runs immediately after JOB-2
+  ingest-statements.yml       daily, decrypts + parses statement PDFs
+  reconcile.yml                runs immediately after ingest-statements
 scripts/
   ingest_statements.py, reconcile.py, verify_token.py
-  lib/                         Python ports of the _shared/ helpers (separate runtime, §12)
-dashboard/                    Next.js app, deployed to Vercel (Phase 5) — budgets,
-                               card optimisation views, manual entry, and warnings/triage
+  lib/                         Python ports of the _shared/ helpers (a separate runtime — see docs/architecture.md)
+dashboard/                    Next.js app, deployed to Vercel — budgets, card
+                               status, manual entry, and merchant triage
 tests/                        parser + merchant + period regression tests, fixtures/
-docs/                         build spec, setup status
+docs/                         architecture, the Singapore worked example, and setup guides
 ```
-
-## Status
-
-**[`docs/SETUP_STATUS.md`](docs/SETUP_STATUS.md) is the live checklist** —
-what's done, what's blocked and why, and the exact commands for what's left.
-Read that first when picking this back up, especially on a new machine.
-
-Phase 0A is done: the Supabase project (`<YOUR_SUPABASE_PROJECT_REF>`, `ap-southeast-1`)
-is created, migrations `0001`–`0007` are applied (schema, seed data, and the
-Phase 3 rules engine), and historical transactions have been backfilled.
-Phase 3 (card optimisation rules) is live. Telegram has been removed —
-warnings and merchant triage now belong to the Phase 5 dashboard, not yet
-built. See `docs/SETUP_STATUS.md` for the exact remaining steps.
-
-Two things are explicitly deferred pending real data, not oversights:
-
-- `uob_one.cycle_day` is `null` until read off a real UOB statement (§5,
-  §12 item 6). Until then, UOB transactions get `period_key =
-  'uob_one:pending'` rather than a guessed period — see
-  `supabase/functions/_shared/period.ts`.
-- Citi Cash Back's `method_rules` rows are staged with `valid_from =
-  '2099-01-01'` and no `payment_methods` row exists yet — insert both once
-  the card is issued and a real alert sample is captured (§5, §12 item Citi).
 
 ## Secrets — four runtimes, four stores
 
-Each runtime reads only its own secret store; never unify them (§11, §12).
+Each runtime reads only its own secret store; never unify them. The full
+rationale for keeping them separate, and exactly where each value comes
+from, is in the per-integration guides under `docs/setup/`.
 
 | Runtime | Store | Variables |
 |---|---|---|
@@ -79,14 +122,12 @@ Each runtime reads only its own secret store; never unify them (§11, §12).
 | Postgres (`pg_cron` → `pg_net`) | Supabase Vault | bearer token used to invoke Edge Functions on schedule |
 | Vercel (dashboard) | project env vars | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — **public values only**, never a secret |
 
-`CRON_SHARED_SECRET` is what every Edge Function checks the Vault-held
-bearer token against (`_shared/cron_auth.ts`) — confirm the current
-`pg_cron` → Edge Function auth pattern against live Supabase docs before
-wiring the cron jobs (§12 item 9); don't copy an older example using
-`pgjwt` or `pgsodium`, both deprecated.
+`HEALTHCHECKS_PING_URL` is the only out-of-band alarm this system has —
+Supabase Cron itself has no failure alerting of its own. It's optional in
+the sense that nothing crashes without it, but skipping it means you
+won't be told if automation silently stops.
 
-`HEALTHCHECKS_PING_URL` is required, not optional, now that the Telegram
-bot is gone (§10 AMENDMENT) — it is the only out-of-band alarm left
-(`_shared/healthchecks.ts`, `scripts/setup_secrets.sh`).
-
-See `docs/cardledger-build-spec.md` §11 for the full security model.
+See [`docs/architecture.md`](docs/architecture.md)'s security-model
+section for the full reasoning behind this split, and the RLS/grants
+model that's the actual line of defence around your data (not the
+secrecy of these values — the Vercel-facing two are meant to be public).

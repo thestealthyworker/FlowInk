@@ -21,7 +21,8 @@ and asks Anthropic to extract structured transaction data from them. It
 never reads your bank credentials and never logs into a bank portal — it
 only ever reads mail you already receive. The Gmail OAuth scope this
 project requests is **`gmail.readonly` and nothing more**
-(`scripts/setup_secrets.sh:85`, `docs/cardledger-build-spec.md` §11).
+(`scripts/setup_secrets.sh:85`, [`docs/architecture.md`](../architecture.md)'s
+security-model section).
 
 This matters beyond "less scope is safer" as a platitude: `gmail.readonly`
 cannot send mail, cannot modify or delete anything in your mailbox, and
@@ -31,6 +32,12 @@ mail" — bad, but bounded — not "someone can act as you." Don't be tempted
 to request a broader scope for convenience (e.g. to also label or archive
 processed messages); it would make the token strictly more dangerous to
 leak for no functional benefit this project needs.
+
+**Turn on MFA on whichever Google account you use for this**, ideally
+before you even mint the refresh token. It holds mail access, however
+scoped, and it's realistically the higher-value target compared to the
+Supabase project itself — it's the account that would let someone
+correlate real financial activity to a real identity.
 
 ## 1. Create a Google Cloud project
 
