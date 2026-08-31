@@ -64,3 +64,25 @@ class SupabaseREST:
         res = requests.patch(f"{self.base}/{table}", headers=headers, params=params, json=patch, timeout=30)
         res.raise_for_status()
         return res.json()
+
+    def rpc(self, function: str, args: dict[str, Any]) -> Any:
+        """Call a Postgres function over PostgREST's ``/rpc/<function>``
+        endpoint — the same call shape ``dashboard/lib/actions/config.ts``
+        makes via ``supabase.rpc(...)`` from the Next.js runtime, just
+        issued from this REST client's runtime instead (WP7's validator:
+        see ``scripts/lib/rules_validator.py``). Every RPC this project
+        exposes to a non-superuser role is ``security invoker`` (0018's
+        own comment on ``submit_method_rule`` — the one deliberate
+        exception, ``is_operator()``, is ``security definer`` by design,
+        0008's header explains why), so a call made with the service-role
+        key here runs with service_role's own privileges — RLS bypassed,
+        ``is_operator()`` reading ``auth.uid()`` as null and evaluating
+        false — never with elevated authority contributed by this client.
+        Raises ``requests.HTTPError`` (with the Postgres error message in
+        the response body) on a failed call, e.g. a ``RAISE EXCEPTION``
+        inside the function or a trigger it fires — never swallowed here,
+        matching every other method on this class.
+        """
+        res = requests.post(f"{self.base}/rpc/{function}", headers=self.headers, json=args, timeout=30)
+        res.raise_for_status()
+        return res.json()
