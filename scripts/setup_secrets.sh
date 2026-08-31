@@ -8,8 +8,14 @@
 #
 # Telegram was removed on 2026-08-25 (operator decision): warnings live on the
 # dashboard instead. That deleted the only public unauthenticated endpoint in
-# the system, and made healthchecks.io load-bearing rather than optional —
-# see the note above HEALTHCHECKS_PING_URL below.
+# the system. healthchecks.io remains the only OUT-OF-BAND failure signal
+# (nothing else notices a dead cron schedule from outside Supabase), but WP3
+# (0016_integration_status.sql, supabase/functions/heartbeat/index.ts) made
+# it a detected OPTIONAL integration, not a hard prerequisite: heartbeat
+# reports it as "not configured" and the dashboard surfaces that honestly
+# instead of the pipeline silently pretending to be monitored. This script
+# follows that: HEALTHCHECKS_PING_URL is offered, not required — see the
+# note above the check below.
 #
 # Usage:  bash scripts/setup_secrets.sh
 #
@@ -17,7 +23,7 @@
 #   - ~/cardledger-auth/client_secret.json  (the published OAuth desktop client)
 #   - supabase CLI logged in, repo linked to the project
 #   - a browser on this machine (Google consent is interactive)
-#   - a healthchecks.io ping URL (free tier)
+#   - (optional, recommended) a healthchecks.io ping URL (free tier)
 
 set -euo pipefail
 
@@ -158,16 +164,26 @@ read -r -s -p "ANTHROPIC_API_KEY (input hidden): " ANTHROPIC_API_KEY; echo
 
 # No default: this is per-project. Export HEALTHCHECKS_PING_URL before running,
 # e.g. HEALTHCHECKS_PING_URL="https://hc-ping.com/<your-check-uuid>".
+#
+# OPTIONAL, not required (WP3, 0016_integration_status.sql /
+# supabase/functions/heartbeat/index.ts): heartbeat detects and reports
+# `healthchecks.configured = false` when this is unset, and the dashboard
+# shows that honestly instead of the operator getting a hard block here.
+# Absent-by-choice must not fail setup — only validate the URL shape when a
+# value IS actually supplied; skip validation and skip pushing this secret
+# at all when it isn't, rather than pushing an empty one.
 : "${HEALTHCHECKS_PING_URL:=}"
-note "Using healthchecks ping URL ending ...${HEALTHCHECKS_PING_URL##*-}"
+if [ -n "$HEALTHCHECKS_PING_URL" ]; then
+  case "$HEALTHCHECKS_PING_URL" in
+    https://hc-ping.com/*) ;;
+    *) die "that does not look like a healthchecks.io ping URL" ;;
+  esac
+  note "Using healthchecks ping URL ending ...${HEALTHCHECKS_PING_URL##*-}"
+else
+  note "HEALTHCHECKS_PING_URL not set — skipping it (optional; the dashboard will show healthchecks as not configured)."
+fi
 
-[ -n "$ANTHROPIC_API_KEY" ]     || die "ANTHROPIC_API_KEY is required"
-[ -n "$HEALTHCHECKS_PING_URL" ] || die "HEALTHCHECKS_PING_URL is required — it is the only failure alarm left"
-
-case "$HEALTHCHECKS_PING_URL" in
-  https://hc-ping.com/*) ;;
-  *) die "that does not look like a healthchecks.io ping URL" ;;
-esac
+[ -n "$ANTHROPIC_API_KEY" ] || die "ANTHROPIC_API_KEY is required"
 
 # ---------------------------------------------------------------------------
 # 4. Push to the Edge Function secret store.
@@ -176,14 +192,22 @@ esac
 # Postgres itself needs — the bearer token pg_cron uses via pg_net (§12).
 # ---------------------------------------------------------------------------
 note "Writing secrets to the Edge Function store..."
-"$SUPABASE_BIN" secrets set --project-ref "$PROJECT_REF" \
-  GMAIL_REFRESH_TOKEN="$GMAIL_REFRESH_TOKEN" \
-  GMAIL_CLIENT_ID="$GMAIL_CLIENT_ID" \
-  GMAIL_CLIENT_SECRET="$GMAIL_CLIENT_SECRET" \
-  ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-  CRON_SHARED_SECRET="$CRON_SHARED_SECRET" \
-  HEALTHCHECKS_PING_URL="$HEALTHCHECKS_PING_URL" \
-  >/dev/null
+edge_secrets=(
+  GMAIL_REFRESH_TOKEN="$GMAIL_REFRESH_TOKEN"
+  GMAIL_CLIENT_ID="$GMAIL_CLIENT_ID"
+  GMAIL_CLIENT_SECRET="$GMAIL_CLIENT_SECRET"
+  ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+  CRON_SHARED_SECRET="$CRON_SHARED_SECRET"
+)
+# Optional (see the note above HEALTHCHECKS_PING_URL's check): push it only
+# when actually supplied, rather than setting it to an empty string — an
+# empty secret would make heartbeat's `Boolean(Deno.env.get(...))` detection
+# (supabase/functions/heartbeat/index.ts) report "configured" for a value
+# that isn't really usable.
+if [ -n "$HEALTHCHECKS_PING_URL" ]; then
+  edge_secrets+=(HEALTHCHECKS_PING_URL="$HEALTHCHECKS_PING_URL")
+fi
+"$SUPABASE_BIN" secrets set --project-ref "$PROJECT_REF" "${edge_secrets[@]}" >/dev/null
 
 note "Edge Function secrets set."
 

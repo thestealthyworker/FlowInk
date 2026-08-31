@@ -44,4 +44,13 @@ jobs:
           # AMENDMENT). healthchecks.io is now the only out-of-band alarm —
           # see scripts/lib/healthchecks.py.
           HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
+          # reconcile.py calls lib.senders.reconcilable_method_ids() with no
+          # db client, so statement_sender_domains() never takes its
+          # live-DB-read branch here — it's this env var or the hardcoded
+          # DEFAULT_STATEMENT_SENDER_DOMAINS fallback (scripts/lib/senders.py
+          # priority order in statement_sender_domains()'s docstring).
+          # Without forwarding it, the STATEMENT_SENDER_DOMAINS secret has no
+          # effect on this job even when ingest-statements.yml picks it up —
+          # same class of omission as that workflow's own fix.
+          STATEMENT_SENDER_DOMAINS: ${{ secrets.STATEMENT_SENDER_DOMAINS }}
         run: python scripts/reconcile.py
