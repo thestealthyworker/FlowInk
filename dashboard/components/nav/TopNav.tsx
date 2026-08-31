@@ -23,9 +23,10 @@ const ADD_GROUP = [
   { href: "/budgets", label: "Budgets" },
   { href: "/transactions/new", label: "Add manual entry" },
   { href: "/triage", label: "Merchant triage" },
+  { href: "/config", label: "Cards & rules" },
 ] as const;
 
-export function TopNav({ triageBadge }: { triageBadge: number }) {
+export function TopNav({ triageBadge, reviewBadge }: { triageBadge: number; reviewBadge: number }) {
   const pathname = usePathname();
 
   return (
@@ -43,9 +44,12 @@ export function TopNav({ triageBadge }: { triageBadge: number }) {
       <details className="topbar__add">
         <summary>
           Add
-          {triageBadge > 0 && (
-            <span className="topbar__add-badge" aria-label={`${triageBadge} merchants awaiting triage`}>
-              {triageBadge}
+          {triageBadge + reviewBadge > 0 && (
+            <span
+              className="topbar__add-badge"
+              aria-label={`${triageBadge} merchants awaiting triage, ${reviewBadge} rules awaiting review`}
+            >
+              {triageBadge + reviewBadge}
             </span>
           )}
         </summary>
@@ -56,6 +60,11 @@ export function TopNav({ triageBadge }: { triageBadge: number }) {
               {item.href === "/triage" && triageBadge > 0 && (
                 <span className="topbar__add-badge" aria-label={`${triageBadge} awaiting`}>
                   {triageBadge}
+                </span>
+              )}
+              {item.href === "/config" && reviewBadge > 0 && (
+                <span className="topbar__add-badge" aria-label={`${reviewBadge} rules awaiting review`}>
+                  {reviewBadge}
                 </span>
               )}
             </Link>

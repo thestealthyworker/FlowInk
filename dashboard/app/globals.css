@@ -10,6 +10,7 @@
 @import "./styles/trends.css";
 @import "./styles/breakdown.css";
 @import "./styles/cards.css";
+@import "./styles/config.css";
 @import "./styles/triage.css";
 @import "./styles/transactions.css";
 @import "./styles/ledger-ink.css";
