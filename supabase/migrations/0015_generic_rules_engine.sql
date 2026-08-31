@@ -53,8 +53,10 @@
 -- comments directly above each `alter table ... add column` below for the
 -- full explanation at its point of use.
 --
--- THREE COLUMNS BEYOND THE DESIGN DOC'S §2 LIST — flagged prominently,
--- not silently added
+-- COLUMNS BEYOND THE DESIGN DOC'S §2 LIST — flagged prominently,
+-- not silently added (originally three; now two this migration itself
+-- adds, plus payment_methods.currency which 0014 got to first — see
+-- that bullet below)
 -- ------------------------------------------------------------------
 -- design/rules-engine.md §2 lists the method_rules/payment_methods column
 -- additions needed for the primitives it enumerates, but its own §3.1
@@ -76,12 +78,20 @@
 --     says where that string comes from generically; today it exists only
 --     as a comment in hsbc_month_status (0007 lines 748-753), not data.
 --     Backfilled onto HSBC's two bonus-category rows only.
---   - payment_methods.currency (text, not null default 'SGD'). The
---     design's §3.1 example includes `"currency": "SGD"` as a NEW field
---     "from payment_methods.currency (see onboarding.md)" but never adds
---     the column. Added here with a default that reproduces this
---     single-country deployment's status quo for every existing row
---     without a backfill statement.
+--   - payment_methods.currency: design §3.1's example includes
+--     `"currency": "SGD"` "from payment_methods.currency" but its own §2
+--     schema list never adds the column — this migration's first draft
+--     added it here. By the time this migration was rebased onto the
+--     current branch tip, 0014_ingestion_routing_as_data.sql (WP2, landed
+--     first) had independently added the exact same column — `currency
+--     text not null default 'SGD' check (currency ~ '^[A-Z]{3}$')`, for
+--     the parser's own needs — so this migration does NOT re-add it
+--     (Postgres would reject a duplicate `add column`); evaluate_period()
+--     below simply reads the column 0014 already created. Flagged as the
+--     one place this migration's own header note about "three columns
+--     beyond §2" turned into two once WP2 landed on the same branch —
+--     the other two (reward_unit, estimate_caveat) are still added here,
+--     genuinely new.
 --
 -- Two more additions to the JSON *output* (not the schema) beyond the
 -- literal §3.1 example, both documented at their point of use below:
@@ -305,10 +315,18 @@ comment on column payment_methods.aggregation_anchor_date is
    see evaluate_period_group() below for the bit-for-bit preserved
    arithmetic.';
 
+-- NOTE: currency is deliberately NOT added here. design/rules-engine.md
+-- §3.1 names it as a field this migration's output contract needs, and
+-- this migration's first draft did add it — but 0014_ingestion_routing_
+-- as_data.sql (WP2), which landed on this branch first, independently
+-- added the identical column (`currency text not null default 'SGD'
+-- check (currency ~ '^[A-Z]{3}$')`) for the parser's own needs. Adding it
+-- again here would fail with "column already exists". evaluate_period()
+-- below reads payment_methods.currency exactly as if this migration had
+-- added it — the column exists, owned by 0014, documented there.
 alter table payment_methods
   add column aggregation_window int check (aggregation_window is null or aggregation_window >= 2),
   add column rule_overrides jsonb,
-  add column currency text not null default 'SGD',
   add column reward_unit text;
 
 comment on column payment_methods.aggregation_window is
@@ -335,15 +353,6 @@ comment on column payment_methods.rule_overrides is
    schema comment, since the whole point is these are the cases the
    schema deliberately does not model), and keep every other row''s value
    NULL.';
-
-comment on column payment_methods.currency is
-  'ISO 4217 code the amounts in this card''s evaluate_period() output are
-   denominated in. Defaults to SGD for every existing row (this is
-   currently a Singapore-only deployment) so no backfill statement is
-   needed. Added here because design/rules-engine.md §3.1''s output
-   contract names this field but the design doc''s own §2 schema list
-   never adds the column it reads from — see this migration''s header
-   note.';
 
 comment on column payment_methods.reward_unit is
   'The unit evaluate_period()''s reward_tracks[].unit and the old
