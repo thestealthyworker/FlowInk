@@ -759,13 +759,13 @@ Self-hosting would mean owning Postgres patching, firewall rules, disk encryptio
 
 ### The design principle that matters most
 
-**Make a breach embarrassing rather than costly.** With card numbers redacted at parse time, the database holds merchant names and amounts. No PANs, no credentials, no ability to move money. An attacker learns where I buy groceries. Design to that standard and every other control is a second line rather than the only line.
+**Make a breach embarrassing rather than costly.** With card numbers redacted at parse time, the database holds merchant names and amounts. No PANs, no credentials, no ability to move money. An attacker learns where the operator buys groceries. Design to that standard and every other control is a second line rather than the only line.
 
 ### Controls (all of these are our responsibility, not Supabase's)
 
 - **Read-only throughout.** No bank credentials anywhere in the system. No portal scraping.
 
-  **The line:** fetching from Gmail is fine — my mail, my API, OAuth readonly. Scraping a bank portal is not. It requires internet banking credentials, likely breaches the bank's terms, and shifts fraud liability onto me. If a data gap tempts a scraper, fix the alert threshold instead.
+  **The line:** fetching from Gmail is fine — the operator's own mail, the operator's own API, OAuth readonly. Scraping a bank portal is not. It requires internet banking credentials, likely breaches the bank's terms, and shifts fraud liability onto the operator. If a data gap tempts a scraper, fix the alert threshold instead.
 - **Gmail OAuth scoped to readonly.**
 - **Redact card numbers at parse time.** Store last 4 only, never the PAN. Never store then hide.
 - **Service role key** lives in Supabase Vault and GitHub Secrets only. Never in a repo, never in an Edge Function env that gets logged. It bypasses RLS entirely and is the single most likely cause of compromise.
@@ -781,11 +781,11 @@ Self-hosting would mean owning Postgres patching, firewall rules, disk encryptio
 
 ### Regulatory
 
-PDPA does not apply — it excludes data used purely for personal or domestic purposes, and this is my own data about myself.
+PDPA does not apply — it excludes data used purely for personal or domestic purposes, and this is the operator's own data about themselves.
 
 **If this is ever productised commercially for clients, that changes entirely**: consent collection, retention policy, breach notification within the PDPC window, and a DPA with Supabase. Treat any multi-tenant version as a separate build with a separate threat model, not an extension of this one.
 
-Nothing in this design breaches bank terms. It reads my own email and my own documents.
+Nothing in this design breaches bank terms. It reads the operator's own email and the operator's own documents.
 
 ---
 

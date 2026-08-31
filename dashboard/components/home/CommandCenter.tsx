@@ -59,8 +59,7 @@ export interface CommandCenterProps {
 const TALLY_SEGMENTS = 10;
 
 // A literal structural port of the "Ledger & Ink" artifact's Command
-// Center section (https://claude.ai/code/artifact/c13a7ac1-9379-4391-8dd4-5266690d101d)
-// — same section-label/ledger-row/cc-grid/budget-grid/card-strip shape,
+// Center section — same section-label/ledger-row/cc-grid/budget-grid/card-strip shape,
 // wired to real Supabase-backed data instead of the artifact's
 // illustrative numbers.
 export function CommandCenter(props: CommandCenterProps) {

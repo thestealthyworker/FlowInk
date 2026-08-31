@@ -1,5 +1,4 @@
 /* Literal port of the "Ledger & Ink" artifact's component CSS
-   (https://claude.ai/code/artifact/c13a7ac1-9379-4391-8dd4-5266690d101d)
    into the app's existing token system — same class shapes and rules as
    the artifact, but referencing app/styles/tokens.css's --color-N and
    --series-N variables (which already carry the artifact's exact oklch
