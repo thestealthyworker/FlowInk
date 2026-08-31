@@ -2,18 +2,45 @@
 // Model: claude-haiku-4-5-20251001 — high-volume, low-complexity extraction.
 // Temperature 0 — deterministic extraction, not generation.
 //
-// PARSER_SYSTEM_PROMPT is the single source of truth for the prompt.
-// parser_prompt.txt is a generated mirror of it kept for consumers that
-// cannot import TypeScript (the Python fixture test in tests/); the two
-// are asserted equal by parser_prompt_test.ts so they cannot drift
-// silently. Regenerate with:
-//   deno run --allow-read --allow-write _shared/write_parser_prompt.ts
+// PARSER_SYSTEM_PROMPT is the single source of truth for the prompt (the
+// default-parameterised output of buildParserSystemPrompt() below).
 
 export const EMAIL_DELIMITER_START = "<<<UNTRUSTED_EMAIL>>>";
 export const EMAIL_DELIMITER_END = "<<<END_UNTRUSTED_EMAIL>>>";
 
-export const PARSER_SYSTEM_PROMPT =
-  `You extract structured transaction data from Singapore bank alert emails.
+// WP2 (design/ingestion-routing.md): the ambiguous-date rule used to be a
+// hardcoded "DD/MM/YY" literal in the prompt below — correct for Singapore
+// (and most of the world) but wrong for a US-issued card, where an
+// ambiguous 03/04/26 is month-first. This is a per-deployment setting, not
+// a fact about the extraction task, so it is now a parameter of
+// `buildParserSystemPrompt` rather than a literal in the template string.
+// `date_format_convention` (a `deployment_config` value, out of this
+// package's scope — see design/onboarding.md) is expected to feed this;
+// nothing in this codebase sets anything other than the default yet, so
+// today's single-SG-deployment behaviour is unchanged.
+export type DateFormatConvention = "day_first" | "month_first";
+
+const DEFAULT_DATE_FORMAT_CONVENTION: DateFormatConvention = "day_first";
+
+function ambiguousDateRule(convention: DateFormatConvention): string {
+  return convention === "month_first"
+    ? "Ambiguous dates: MM/DD/YY unless the day is unambiguously above 12."
+    : "Ambiguous dates: DD/MM/YY unless the day is unambiguously above 12.";
+}
+
+/**
+ * Builds PARSER_SYSTEM_PROMPT with the date-ambiguity rule interpolated
+ * instead of hardcoded. Called with no argument (or "day_first"), this
+ * MUST produce text byte-for-byte identical to the prompt as it existed
+ * before this parameterisation — proved, not assumed, by
+ * anthropic_test.ts's "date_format_convention default reproduces the
+ * original prompt byte-for-byte" case, which asserts the output against a
+ * captured snapshot of the pre-change literal.
+ */
+export function buildParserSystemPrompt(
+  dateFormatConvention: DateFormatConvention = DEFAULT_DATE_FORMAT_CONVENTION,
+): string {
+  return `You extract structured transaction data from Singapore bank alert emails.
 
 Return ONLY a single JSON object matching the schema. No markdown fences,
 no preamble, no explanation.
@@ -44,7 +71,7 @@ Rules:
 - merchant_raw is verbatim from the email: the merchant or payee string
   exactly as printed, including any line-wrap artefacts. Null if the email
   names no merchant or payee.
-- Ambiguous dates: DD/MM/YY unless the day is unambiguously above 12.
+- ${ambiguousDateRule(dateFormatConvention)}
 - If the email gives a date with no year (e.g. PayLah's "22 Aug"), infer
   the year from the "Email received" date given below. If that inferred
   date would be in the future, use the prior year instead (December ->
@@ -56,6 +83,9 @@ Rules:
 
 If the email is not a transaction alert (marketing, statement notice,
 security notice), return {"txn_type": "not_a_transaction"}.`;
+}
+
+export const PARSER_SYSTEM_PROMPT = buildParserSystemPrompt();
 
 export interface ParsedAlert {
   amount?: number;
@@ -85,6 +115,13 @@ export interface ParseInput {
   bodyText: string;
   /** ISO timestamp of the Gmail internalDate. Trusted — set by Gmail, not by the sender. */
   emailReceivedIso: string;
+  /**
+   * Per-deployment date-ambiguity convention. Optional and defaults to
+   * "day_first" inside buildParserSystemPrompt — omitting it (as every
+   * caller in this codebase currently does) reproduces today's SG
+   * behaviour exactly.
+   */
+  dateFormatConvention?: DateFormatConvention;
 }
 
 /**
@@ -111,7 +148,7 @@ function buildUserTurn(input: ParseInput): string {
   ].join("\n");
 }
 
-async function callOnce(userText: string): Promise<string> {
+async function callOnce(userText: string, systemPrompt: string): Promise<string> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
@@ -128,7 +165,7 @@ async function callOnce(userText: string): Promise<string> {
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         temperature: 0,
-        system: PARSER_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [{ role: "user", content: userText }],
       }),
     });
@@ -160,10 +197,11 @@ async function callOnce(userText: string): Promise<string> {
 // yields the same output.
 export async function parseAlert(input: ParseInput): Promise<ParsedAlert> {
   const userText = buildUserTurn(input);
+  const systemPrompt = buildParserSystemPrompt(input.dateFormatConvention);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const raw = await callOnce(userText);
+      const raw = await callOnce(userText, systemPrompt);
       // The system prompt says "no markdown fences", but an instruction is not
       // a guarantee — observed 2026-08-26 on the first real alert emails, the
       // model wrapped its JSON in ```json fences and every one failed to parse.

@@ -350,7 +350,13 @@ def main() -> int:
         {"select": "id,match_pattern,display_name,category,is_transfer,confidence"},
     )
 
-    domain_map = senders.statement_sender_domains()
+    # WP2 (design/ingestion-routing.md): default source is now a live read
+    # of payment_methods.statement_senders via this same `db` client,
+    # instead of the hardcoded DEFAULT_STATEMENT_SENDER_DOMAINS constant —
+    # the one place a user edits routing config, the same table
+    # ingest-alerts/index.ts reads for the alert path. STATEMENT_SENDER_DOMAINS
+    # still overrides it first, unchanged, as a local/CI escape hatch.
+    domain_map = senders.statement_sender_domains(db=db)
     default_query = DEFAULT_QUERY_TEMPLATE.format(sender_filter=senders.gmail_sender_prefilter(domain_map))
     query = os.environ.get("STATEMENT_GMAIL_QUERY", default_query)
     after_seconds = max((watermark - 3 * 24 * 60 * 60 * 1000) // 1000, 0)
