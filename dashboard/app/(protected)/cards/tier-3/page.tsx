@@ -25,7 +25,10 @@ export default async function TierThreePage() {
   ]);
 
   const uob = cards.find((c) => c.method_id === "uob_one");
-  const quarter = uob?.status.quarter as
+  // WP4 cutover: card_period_status()'s cross-period field is now `group`
+  // (evaluate_period_group()'s own shape, 0015/0017), not the old
+  // `quarter` key uob_quarter_status() used to return.
+  const quarter = uob?.status.group as
     | { anchor_unknown?: boolean; grouping?: string; forfeited?: boolean; still_achievable_tier?: { threshold: number; payout: number } | null }
     | undefined;
 

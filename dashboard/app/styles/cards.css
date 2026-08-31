@@ -129,6 +129,66 @@
   margin: 0 0 var(--space-2);
 }
 
+/* ---- generic reward-track sections (TierTrack / RateTrack) ---- */
+.card-gauge__section-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.card-gauge__section {
+  margin-top: var(--space-4);
+}
+
+.card-gauge__section--muted {
+  opacity: 0.65;
+}
+
+.card-gauge__section-label {
+  margin: 0 0 var(--space-1);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.card-gauge__section-rate {
+  font-weight: 400;
+  color: var(--color-ink-muted);
+}
+
+.card-gauge__track--slim {
+  height: 0.6rem;
+  margin: var(--space-2) 0;
+}
+
+/* ---- gate chips ---- */
+.card-gauge__gates {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.card-gauge__gate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.card-gauge__gate-glyph {
+  color: var(--color-ink-muted);
+}
+
+.card-gauge__gate[data-cleared] .card-gauge__gate-glyph {
+  color: var(--color-good);
+}
+
+.card-gauge-card--budget-only {
+  opacity: 0.85;
+}
+
 .card-gauge__asterisk {
   display: block;
   margin-top: var(--space-1);
@@ -166,13 +226,13 @@
   color: var(--color-ink);
 }
 
-.card-gauge__quarter {
+.card-gauge__group {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--color-hairline);
 }
 
-.card-gauge__quarter-heading {
+.card-gauge__group-heading {
   margin: 0 0 var(--space-2);
   font-weight: 700;
   font-size: var(--text-sm);
@@ -205,7 +265,7 @@
 }
 
 /* ---- quarter pills ---- */
-.quarter-pills {
+.group-strip {
   list-style: none;
   margin: 0 0 var(--space-3);
   padding: 0;
@@ -213,7 +273,7 @@
   gap: var(--space-2);
 }
 
-.quarter-pill {
+.group-pill {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -225,45 +285,45 @@
   background: var(--color-surface);
 }
 
-.quarter-pill__glyph {
+.group-pill__glyph {
   font-size: var(--text-lg);
   font-weight: 700;
   line-height: 1;
 }
 
-.quarter-pill__label {
+.group-pill__label {
   font-size: var(--text-xs);
   text-align: center;
   color: var(--color-ink-secondary);
 }
 
-.quarter-pill__spend {
+.group-pill__spend {
   font-size: var(--text-xs);
 }
 
-.quarter-pill[data-state="cleared"] {
+.group-pill[data-state="cleared"] {
   border-color: var(--color-good);
   background: color-mix(in oklch, var(--color-good) 10%, var(--color-surface));
 }
 
-.quarter-pill[data-state="cleared"] .quarter-pill__glyph {
+.group-pill[data-state="cleared"] .group-pill__glyph {
   color: var(--color-good);
 }
 
-.quarter-pill[data-state="forfeited"] {
+.group-pill[data-state="forfeited"] {
   border-color: var(--color-critical);
   background: color-mix(in oklch, var(--color-critical) 10%, var(--color-surface));
 }
 
-.quarter-pill[data-state="forfeited"] .quarter-pill__glyph {
+.group-pill[data-state="forfeited"] .group-pill__glyph {
   color: var(--color-critical);
 }
 
-.quarter-pill[data-state="pending"] .quarter-pill__glyph {
+.group-pill[data-state="pending"] .group-pill__glyph {
   color: var(--color-ink-muted);
 }
 
-.quarter-pill[data-is-current] {
+.group-pill[data-is-current] {
   border-style: dashed;
   border-width: 2px;
 }
