@@ -1,0 +1,351 @@
+/* App shell (redesign/visuals): a top header nav on tablet/desktop
+   (replacing the old left rail), a bottom tab bar plus a floating action
+   button on mobile — a shape change across the 768px breakpoint, not one
+   reflowing nav component. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in oklch, var(--color-page) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-hairline);
+  flex-wrap: wrap;
+}
+
+.topbar__brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.topbar__brand {
+  font-family: var(--font-voice);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.topbar__brand-sub {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+@media (min-width: 768px) {
+  .topbar__nav {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* Mobile: the top nav (including its "Add" disclosure) is redundant with
+   the bottom tab bar, which carries the same 3 destinations plus its own
+   "Add" tab — keep the top bar to just brand + theme/sign-out on mobile. */
+@media (max-width: 767px) {
+  .topbar__nav {
+    display: none;
+  }
+}
+
+.topbar__nav-link {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.topbar__nav-link:hover {
+  color: var(--color-ink);
+}
+
+.topbar__nav-link[aria-current="page"] {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ---- "Add" disclosure — a native <details>, no JS required ---- */
+.topbar__add {
+  position: relative;
+}
+
+.topbar__add summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.topbar__add summary::-webkit-details-marker {
+  display: none;
+}
+
+.topbar__add summary::after {
+  content: "▾";
+  font-size: 0.7em;
+  margin-left: 2px;
+}
+
+.topbar__add:hover summary,
+.topbar__add[open] summary {
+  color: var(--color-ink);
+}
+
+.topbar__add-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-1);
+}
+
+.topbar__add-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-ink-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbar__add-link:hover,
+.topbar__add-link[aria-current="page"] {
+  background: var(--color-surface-sunk);
+  color: var(--color-ink);
+}
+
+.topbar__add-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  background: var(--color-warning);
+  color: var(--color-ink);
+  font-family: var(--font-money);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* Sign-out matches the header's own nav-link/chip vocabulary — flat,
+   muted text, no bordered box — instead of base.css's generic button. */
+.topbar__signout button {
+  background: none;
+  border: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-ink-secondary);
+}
+
+.topbar__signout button:hover {
+  background: var(--color-surface-sunk);
+  color: var(--color-ink);
+}
+
+.shell__content {
+  flex: 1;
+  padding: var(--space-4);
+  padding-bottom: calc(5.5rem + var(--space-4));
+  max-width: 78rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---- bottom tab bar (mobile) ---- */
+.bottom-tabs {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-hairline);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.bottom-tabs__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-ink-muted);
+  text-decoration: none;
+}
+
+.bottom-tabs__item[aria-current="page"] {
+  color: var(--color-accent);
+}
+
+.bottom-tabs__item svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bottom-tabs__item--ghost {
+  color: var(--color-ink-muted);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.bottom-tabs__soon {
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ---- mobile "Add" tab — same disclosure pattern as the desktop top nav,
+   but the menu opens upward (anchored at the bottom of the screen) ---- */
+.bottom-tabs__add {
+  flex: 1;
+  position: relative;
+}
+
+.bottom-tabs__add summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.bottom-tabs__add summary::-webkit-details-marker {
+  display: none;
+}
+
+.bottom-tabs__add-menu {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-1);
+}
+
+.bottom-tabs__add-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-ink-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bottom-tabs__add-link:hover {
+  background: var(--color-surface-sunk);
+  color: var(--color-ink);
+}
+
+@media (min-width: 768px) {
+  .bottom-tabs {
+    display: none;
+  }
+
+  .topbar {
+    padding: var(--space-4) var(--space-8);
+  }
+
+  .shell__content {
+    padding: var(--space-8);
+  }
+}
+
+.bottom-tabs__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--color-warning);
+  color: var(--color-ink);
+  font-family: var(--font-money);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* ---- theme toggle — same flat chip vocabulary as sign-out/nav-links,
+   not base.css's generic bordered button ---- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border-radius: var(--radius-control);
+  background: none;
+  border: none;
+  color: var(--color-ink-secondary);
+}
+
+.theme-toggle:hover {
+  background: var(--color-surface-sunk);
+  color: var(--color-ink);
+}

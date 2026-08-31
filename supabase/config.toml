@@ -1,0 +1,33 @@
+# FlowInk Supabase project config. See docs/cardledger-build-spec.md §7
+# and §12 item 9 (pg_cron -> Edge Function auth) and §11 (security).
+#
+# Telegram was removed 2026-08-25 (operator decision, §10 AMENDMENT):
+# warnings and merchant triage move to the web dashboard (Phase 5, not yet
+# built). That deleted telegram-webhook, merchant-triage, and nudge — the
+# only public unauthenticated endpoint in the system went with
+# telegram-webhook. Two functions remain, both cron-driven, neither
+# publicly reachable in the way telegram-webhook was.
+#
+# verify_jwt = false on both functions below is deliberate, not an
+# oversight: neither caller sends a Supabase JWT. heartbeat and
+# ingest-alerts are invoked by Supabase Cron via pg_cron -> pg_net, which
+# sends CRON_SHARED_SECRET as a plain bearer token (see
+# _shared/cron_auth.ts). That token is the actual gate for both;
+# requireCronAuth() fails closed if it's missing or wrong, on every
+# request, regardless of this file.
+#
+# `supabase functions deploy` defaults verify_jwt to true. Without this
+# file, both functions would 401 on their very first real invocation (no
+# caller here holds a Supabase JWT), and the predictable fix under
+# pressure is `supabase functions deploy --no-verify-jwt` applied broadly
+# — which strips the platform-level JWT gate from every function
+# simultaneously, including any that might need it later. Pinning
+# verify_jwt = false per function here, deliberately and explained, is the
+# alternative: each function keeps exactly the auth posture its own code
+# implements, and nothing is silently widened at deploy time.
+
+[functions.heartbeat]
+verify_jwt = false
+
+[functions.ingest-alerts]
+verify_jwt = false

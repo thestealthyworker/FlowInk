@@ -1,0 +1,15 @@
+/* Design system entry point (Phase D0). Split into small, cohesive files
+   per feature/surface rather than one monolith — see app/styles/. */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/layout.css";
+@import "./styles/home.css";
+@import "./styles/honest-data.css";
+@import "./styles/forms.css";
+@import "./styles/budgets.css";
+@import "./styles/trends.css";
+@import "./styles/breakdown.css";
+@import "./styles/cards.css";
+@import "./styles/triage.css";
+@import "./styles/transactions.css";
+@import "./styles/ledger-ink.css";

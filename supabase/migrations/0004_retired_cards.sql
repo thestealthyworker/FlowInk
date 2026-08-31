@@ -1,0 +1,72 @@
+-- Retired card: DBS/POSB MasterCard Platinum ending 4444.
+--
+-- A retired card the operator wants historical spend loaded for, purely
+-- for the record — it will not be needed for live ingest going forward.
+--
+-- So: active = false (no live alert/statement ingest routes to it, it
+-- will never collide with a real card's last4 under the partial unique
+-- index below), has_rules = false (no card_rules optimisation — there is
+-- nothing to optimise on a cancelled card), period_type = 'calendar' with
+-- cycle_day = null (there is no live statement cycle to anchor a
+-- 'statement' period_type to; scripts/backfill_statements.py resolves
+-- calendar-month period_key for it via lib/period.py exactly as it does
+-- for HSBC and PayLah).
+--
+-- ============ (a) active = false must not hide this card's spend ============
+-- Audited every place payment_methods.active is read, across both the
+-- schema and the application code, before writing this migration:
+--
+--   - supabase/migrations/0001_schema.sql: `active` gates only the partial
+--     unique index on (issuer, last4) — it lets a retired card's last4 be
+--     reused by a future live card. It does not appear in
+--     transactions/spend_transactions/budgets at all.
+--   - supabase/functions/ingest-alerts/index.ts,
+--     scripts/ingest_statements.py (infer_method_id): `active` gates
+--     whether NEW alert/statement rows may be routed to a method — correct
+--     and desired here, since this card issues no more alerts or
+--     statements.
+--   - supabase/functions/nudge/index.ts: the budget/spend total
+--     (`txns` query, lines ~26-34) reads `transactions` directly, filtered
+--     on calendar_month/status/is_transfer/currency/reconciliation —
+--     never on payment_methods.active. Only the CARD-OPTIMISATION section
+--     (`cardLines`) filters `payment_methods` by `active = true`, which is
+--     correct: a retired card has no tier/cap to display.
+--   - supabase/functions/heartbeat/index.ts: filters `active = true` to
+--     decide which sources should be alerting — correct, this card will
+--     never alert again.
+--
+-- Conclusion: nothing in this schema or codebase filters calendar-month
+-- spend/category rollups by payment_methods.active. A row inserted here
+-- with active = false participates fully in budgets and calendar-month
+-- analysis (the entire reason for loading it) and is correctly excluded
+-- only from the card-optimisation and live-ingest surfaces, where an
+-- inactive/retired card belongs. No code or schema change was needed to
+-- make this hold — this migration only documents the audit.
+--
+-- ============ (b) must never be swept by reconcile.py's 45-day sweep ============
+-- scripts/reconcile.py's stale-provisional reversal (lines ~314-322) is
+-- doubly guarded against ever touching this card's rows:
+--
+--   1. It only ever iterates `result.remaining_provisional`, itself built
+--      from `db.select("transactions", {"status": "eq.provisional", ...})`
+--      (line ~296). scripts/backfill_statements.py inserts every row with
+--      status = 'confirmed' from the start (per this task's spec) — such a
+--      row is never selected into that set in the first place, regardless
+--      of method_id.
+--   2. Even in a hypothetical future where a provisional row existed for
+--      this method (it shouldn't — there is no live alert route to it),
+--      the sweep is further scoped to
+--      `scripts/lib/senders.reconcilable_method_ids()`, which returns only
+--      the method_ids reachable from `statement_sender_domains()` — the
+--      email-domain-to-method_id map. 'dbs_posb_platinum' is deliberately
+--      absent from that map (this card issues no more statements to
+--      route), so it is excluded from `reconcilable_method_ids()` and thus
+--      from the reversal loop by construction, exactly like PayLah today.
+--
+-- Both defences hold unconditionally: do not add a
+-- STATEMENT_SENDER_DOMAINS entry for this card, and do not insert
+-- provisional rows for it (scripts/backfill_statements.py never does).
+
+insert into payment_methods
+  (id, display_name, issuer, last4, method_type, period_type, cycle_day, reward_type, has_rules, active) values
+  ('dbs_posb_platinum', 'DBS/POSB MasterCard Platinum', 'DBS/POSB', '4444', 'credit_card', 'calendar', null, null, false, false);

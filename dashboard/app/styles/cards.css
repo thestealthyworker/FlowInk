@@ -1,0 +1,295 @@
+/* Card optimisation (Phase D4, Views 4 and 5) — the composite gauge, quarter
+   pills, and the Tier-3 record. */
+
+.cards-page,
+.tier3-page {
+  max-width: 56rem;
+}
+
+.card-gauge-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 1024px) {
+  .card-gauge-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.card-gauge-card {
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+}
+
+.card-gauge-card h3 {
+  margin: 0 0 var(--space-4);
+}
+
+.card-gauge-card--ghost {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.card-gauge-card--ghost p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.card-gauge__figures {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-3);
+}
+
+.card-gauge__headline {
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.card-gauge__sub {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.card-gauge__track {
+  position: relative;
+  height: 1.25rem;
+  margin: var(--space-6) 0 var(--space-3);
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-bar);
+  overflow: visible;
+}
+
+.card-gauge__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-bar);
+  transition: width var(--duration-normal) var(--ease-out-expo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-gauge__fill {
+    transition: none;
+  }
+}
+
+.card-gauge__track--dual .card-gauge__fill--bonus {
+  background: var(--color-accent);
+}
+
+.card-gauge__cap-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--color-ink);
+}
+
+.card-gauge__tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--color-baseline);
+  transform: translateX(-1px);
+}
+
+.card-gauge__tick[data-reached] {
+  background: var(--color-ink-secondary);
+}
+
+.card-gauge__tick[data-current] {
+  background: var(--color-ink);
+  width: 3px;
+}
+
+.card-gauge__tick-label {
+  position: absolute;
+  top: -1.3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-money);
+  font-size: 0.6875rem;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+}
+
+.card-gauge__tick[data-current] .card-gauge__tick-label {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.card-gauge__meta {
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-2);
+}
+
+.card-gauge__asterisk {
+  display: block;
+  margin-top: var(--space-1);
+  font-style: italic;
+  color: var(--color-ink-muted);
+  font-size: var(--text-xs);
+}
+
+.card-gauge__reasons {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  color: var(--color-serious);
+}
+
+.card-gauge__tag {
+  display: inline-block;
+  margin-right: var(--space-2);
+  padding: 0.1em 0.5em;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: var(--radius-control);
+}
+
+.card-gauge__tag--critical {
+  background: var(--color-critical);
+  color: var(--color-accent-ink);
+}
+
+.card-gauge__tag--warning {
+  background: color-mix(in oklch, var(--color-warning) 30%, transparent);
+  color: var(--color-ink);
+}
+
+.card-gauge__quarter {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.card-gauge__quarter-heading {
+  margin: 0 0 var(--space-2);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.card-gauge__caveat {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xs);
+  background: color-mix(in oklch, var(--color-warning) 12%, var(--color-surface));
+  border: 1px dashed var(--color-warning);
+  border-radius: var(--radius-control);
+}
+
+.card-gauge__raw {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.card-gauge__raw summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+
+.card-gauge__raw table {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* ---- quarter pills ---- */
+.quarter-pills {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.quarter-pill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  border: 1.5px solid var(--color-baseline);
+  background: var(--color-surface);
+}
+
+.quarter-pill__glyph {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.quarter-pill__label {
+  font-size: var(--text-xs);
+  text-align: center;
+  color: var(--color-ink-secondary);
+}
+
+.quarter-pill__spend {
+  font-size: var(--text-xs);
+}
+
+.quarter-pill[data-state="cleared"] {
+  border-color: var(--color-good);
+  background: color-mix(in oklch, var(--color-good) 10%, var(--color-surface));
+}
+
+.quarter-pill[data-state="cleared"] .quarter-pill__glyph {
+  color: var(--color-good);
+}
+
+.quarter-pill[data-state="forfeited"] {
+  border-color: var(--color-critical);
+  background: color-mix(in oklch, var(--color-critical) 10%, var(--color-surface));
+}
+
+.quarter-pill[data-state="forfeited"] .quarter-pill__glyph {
+  color: var(--color-critical);
+}
+
+.quarter-pill[data-state="pending"] .quarter-pill__glyph {
+  color: var(--color-ink-muted);
+}
+
+.quarter-pill[data-is-current] {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+/* ---- Tier-3 record page ---- */
+.tier3-caveat {
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+  background: color-mix(in oklch, var(--color-warning) 12%, var(--color-surface));
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-control);
+}
+
+.tier3-caveat p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+  max-width: none;
+}
+
+.tier3-verdict {
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+}
+
+.tier3-verdict p {
+  max-width: none;
+}
