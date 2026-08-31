@@ -299,6 +299,55 @@ def record_failure(db: SupabaseREST, source_ref: str, raw_body: str, model_outpu
         print(f"Could not record parse_failures row for {sanitize_for_log(source_ref)}: {exc}", file=sys.stderr)
 
 
+def gmail_configured(env: dict[str, str] | None = None) -> bool:
+    """Whether the three env vars get_access_token() needs are all present.
+
+    Presence only, not a live token-refresh call — a network round trip
+    here on every run just to decide whether to skip is not worth it for
+    a Python/GitHub-Actions runtime that (unlike the Edge Function
+    heartbeat, see supabase/functions/heartbeat/index.ts) is not already
+    running on a schedule independent of this decision.
+    """
+    env = os.environ if env is None else env
+    return bool(env.get("GMAIL_CLIENT_ID")) and bool(env.get("GMAIL_CLIENT_SECRET")) and bool(env.get("GMAIL_REFRESH_TOKEN"))
+
+
+def active_methods_with_statement_sender(methods: list[dict], domain_map: dict[str, str]) -> frozenset[str]:
+    """Active payment_methods.id values that a configured statement sender
+    actually routes to (design/optional-integrations.md, "Statement PDF
+    ingestion" row).
+
+    Reuses lib.senders.reconcilable_method_ids() rather than duplicating
+    its logic — that function already answers "which method ids have a
+    statement source" (senders.py is WP2's file; this only calls its
+    existing public API, never edits it). Empty means: no active payment
+    method in this deployment has statement ingestion configured at all
+    — see main()'s early-exit around this, and the absent-vs-broken
+    distinction it exists to preserve: this is the "genuinely not using
+    this feature" case, not a misconfiguration.
+    """
+    reconcilable = senders.reconcilable_method_ids(domain_map)
+    return frozenset(m["id"] for m in methods if m.get("active", False) and m["id"] in reconcilable)
+
+
+def record_integration_status(db: SupabaseREST, *, configured: bool, detail: str) -> None:
+    """Best-effort status write for the dashboard's degraded-state UI
+    (design/optional-integrations.md's integration_status mechanism,
+    also written by supabase/functions/heartbeat/index.ts for the other
+    three integrations). This script's real job is ingesting statements,
+    not maintaining a status row — mirrors record_failure()'s "never let
+    recording a status crash the actual job" discipline.
+    """
+    try:
+        db.insert(
+            "integration_status",
+            {"key": "statement_ingestion", "configured": configured, "detail": detail},
+            on_conflict="key",
+        )
+    except requests.RequestException as exc:
+        print(f"Could not record integration_status row: {exc}", file=sys.stderr)
+
+
 def insert_transaction_logging_conflicts(db: SupabaseREST, row: dict) -> None:
     """Insert a statement transaction row, logging (not silently allowing)
     a conflicting overwrite of an existing confirmed row.
@@ -336,36 +385,75 @@ def insert_transaction_logging_conflicts(db: SupabaseREST, row: dict) -> None:
 
 def main() -> int:
     db = SupabaseREST()
-    access_token = get_access_token()
-
-    state = db.select("ingest_state", {"stream": "eq.statements", "select": "watermark"})
-    watermark = state[0]["watermark"] if state else 0
 
     methods = db.select("payment_methods", {"select": "id,last4,period_type,cycle_day,active"})
     methods_by_id = {m["id"]: m for m in methods}
     method_by_last4 = {m["last4"]: m for m in methods if m.get("last4")}
-
-    merchants = db.select(
-        "merchants",
-        {"select": "id,match_pattern,display_name,category,is_transfer,confidence"},
-    )
 
     # WP2 (design/ingestion-routing.md): default source is now a live read
     # of payment_methods.statement_senders via this same `db` client,
     # instead of the hardcoded DEFAULT_STATEMENT_SENDER_DOMAINS constant —
     # the one place a user edits routing config, the same table
     # ingest-alerts/index.ts reads for the alert path. STATEMENT_SENDER_DOMAINS
-    # still overrides it first, unchanged, as a local/CI escape hatch.
+    # still overrides it first, unchanged, as a local/CI escape hatch. The
+    # WP3 "no statement senders configured" guard below must read this same
+    # db-backed source, not the deprecated hardcoded fallback, or it would
+    # never detect a deployment that removed its statement_senders rows.
     domain_map = senders.statement_sender_domains(db=db)
+    active_senders = active_methods_with_statement_sender(methods, domain_map)
+
+    # ---- WP3 optional-integration guards, in order (design/optional-integrations.md) ----
+    #
+    # 1. Gmail absent: structurally the very first thing both ingestion
+    #    paths need (mirrors supabase/functions/ingest-alerts/index.ts's
+    #    identical guard) — without it, nothing below this point can run
+    #    regardless of what else is or isn't configured. Absent-by-choice:
+    #    exit cleanly, do not fail the GitHub Actions job.
+    if not gmail_configured():
+        detail = "Gmail not configured (GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN)"
+        record_integration_status(db, configured=bool(active_senders), detail=detail)
+        print(f"{detail} — skipping statement ingestion cleanly.")
+        return 0
+
+    # 2. No active payment method has a statement sender configured at
+    #    all: this deployment genuinely does not use statement ingestion
+    #    (e.g. only PayLah, or a fresh deployment that hasn't wired up any
+    #    card's statement sender yet). Also absent-by-choice: exit cleanly.
+    if not active_senders:
+        detail = "no active payment method has a statement sender configured"
+        record_integration_status(db, configured=False, detail=detail)
+        print(f"{detail} — statement ingestion is not in use for this deployment, skipping cleanly.")
+        return 0
+
+    # 3. Statement senders ARE configured (the job has real work to do)
+    #    but STATEMENT_PDF_PASSWORD is missing: this is the
+    #    present-but-broken case, not an absent one — a deployment that
+    #    intends to use this feature but forgot a required secret. Fail
+    #    loudly (non-zero exit fails the GitHub Actions job, the correct
+    #    channel for this per design/optional-integrations.md's GitHub
+    #    Actions row) rather than silently skipping and hiding a real
+    #    misconfiguration.
+    candidate_passwords = [p for p in os.environ.get("STATEMENT_PDF_PASSWORD", "").split(",") if p]
+    if not candidate_passwords:
+        detail = f"STATEMENT_PDF_PASSWORD not set, but statement senders ARE configured for {sorted(active_senders)}"
+        record_integration_status(db, configured=True, detail=detail)
+        print(f"{detail} — cannot decrypt any statement PDFs. This is a misconfiguration, not absence.", file=sys.stderr)
+        return 1
+
+    access_token = get_access_token()
+
+    state = db.select("ingest_state", {"stream": "eq.statements", "select": "watermark"})
+    watermark = state[0]["watermark"] if state else 0
+
+    merchants = db.select(
+        "merchants",
+        {"select": "id,match_pattern,display_name,category,is_transfer,confidence"},
+    )
+
     default_query = DEFAULT_QUERY_TEMPLATE.format(sender_filter=senders.gmail_sender_prefilter(domain_map))
     query = os.environ.get("STATEMENT_GMAIL_QUERY", default_query)
     after_seconds = max((watermark - 3 * 24 * 60 * 60 * 1000) // 1000, 0)
     ids = list_message_ids(access_token, f"{query} after:{after_seconds}", max_results=50)
-
-    candidate_passwords = [p for p in os.environ.get("STATEMENT_PDF_PASSWORD", "").split(",") if p]
-    if not candidate_passwords:
-        print("STATEMENT_PDF_PASSWORD not set — cannot decrypt any statement PDFs", file=sys.stderr)
-        return 1
 
     messages = []
     for mid in ids:
@@ -516,6 +604,12 @@ def main() -> int:
             {"stream": "statements"},
             {"watermark": last_good_watermark, "updated_at": datetime.now(timezone.utc).isoformat()},
         )
+
+    record_integration_status(
+        db,
+        configured=True,
+        detail=f"last run: messages={len(messages)} inserted={inserted} failed={failed}",
+    )
 
     print(f"ingest-statements: messages={len(messages)} inserted={inserted} failed={failed}")
     return 1 if failed > 0 else 0

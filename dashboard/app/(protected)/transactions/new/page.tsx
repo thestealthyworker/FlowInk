@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { CATEGORIES } from "@/lib/supabase/types";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { formatMoney } from "@/components/honest-data/MoneyFigure";
+import { GmailNotConfiguredNotice } from "@/components/honest-data/IntegrationNotice";
+import { getIntegrationStatus, isConfigured } from "@/lib/data/integration-status";
 
 // Manual entry for non-card spend (Phase D5 restyle; docs/cardledger-build-spec.md
 // §10 AMENDMENT, §14 "cash is invisible"). Always source='manual',
@@ -16,12 +18,18 @@ import { formatMoney } from "@/components/honest-data/MoneyFigure";
 export default async function NewTransactionPage() {
   const supabase = await createClient();
   const calendarMonth = currentCalendarMonth();
-  const manualTxns = await listManualTransactions(supabase, calendarMonth);
+  const [manualTxns, integrationStatus] = await Promise.all([
+    listManualTransactions(supabase, calendarMonth),
+    getIntegrationStatus(supabase),
+  ]);
   const today = new Date().toISOString().slice(0, 10);
   const monthTotal = manualTxns.reduce((sum, t) => sum + Number(t.amount), 0);
+  const gmailConfigured = isConfigured(integrationStatus.gmail);
 
   return (
     <div className="manual-entry-page">
+      {!gmailConfigured && <GmailNotConfiguredNotice context="manual-entry" />}
+
       <header className="page-header">
         <p className="page-header__eyebrow">Add manual entry</p>
         <h1>Non-card spend</h1>

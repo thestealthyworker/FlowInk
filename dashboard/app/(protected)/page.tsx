@@ -9,6 +9,12 @@ import type { CommandCenterKpi } from "@/components/home/command-center/CommandC
 import { LedgerSection } from "@/components/home/LedgerSection";
 import { TrendsSection } from "@/components/home/TrendsSection";
 import { formatMoney } from "@/components/honest-data/MoneyFigure";
+import {
+  GmailNotConfiguredNotice,
+  HealthchecksNotConfiguredNotice,
+  StatementIngestionCalmNotice,
+} from "@/components/honest-data/IntegrationNotice";
+import { getIntegrationStatus, isConfigured } from "@/lib/data/integration-status";
 import { getCardDashboardStatus } from "@/lib/data/cards";
 import { getDailySpend } from "@/lib/data/dailySpend";
 import { getLedgerFacets, listTransactions, type LedgerSortField } from "@/lib/data/ledger";
@@ -81,6 +87,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     trendLeaderboard,
     { rows: ledgerRows, total: ledgerTotal },
     ledgerFacets,
+    integrationStatus,
   ] = await Promise.all([
     getMonthlySpendSummary(supabase, calendarMonth),
     getMonthlySpendByCategory(supabase, previousCalendarMonth),
@@ -99,7 +106,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       offset: (ledgerPageNum - 1) * LEDGER_PAGE_SIZE,
     }),
     getLedgerFacets(supabase, { dateFrom: ledgerFilters.dateFrom, dateTo: ledgerFilters.dateTo }),
+    getIntegrationStatus(supabase),
   ]);
+
+  const gmailConfigured = isConfigured(integrationStatus.gmail);
+  const healthchecksConfigured = isConfigured(integrationStatus.healthchecks);
+  // Only worth mentioning once there's live ingestion to reconcile —
+  // if Gmail itself is off, the Gmail notice already covers the bigger
+  // gap and a second banner about reconciliation would be noise.
+  const showStatementCalmNotice = gmailConfigured && !isConfigured(integrationStatus.statementIngestion);
 
   const resolvedBudgets = resolveCategoryBudgets(allBudgets, calendarMonth);
   const hasBudgets = resolvedBudgets.length > 0;
@@ -251,6 +266,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="home">
+      {(!gmailConfigured || !healthchecksConfigured || showStatementCalmNotice) && (
+        <div className="integration-notice-stack">
+          {!gmailConfigured && <GmailNotConfiguredNotice context="home" />}
+          {!healthchecksConfigured && <HealthchecksNotConfiguredNotice />}
+          {showStatementCalmNotice && <StatementIngestionCalmNotice />}
+        </div>
+      )}
+
       <CommandCenter
         monthLabel={monthLabel}
         topCategoryAside={

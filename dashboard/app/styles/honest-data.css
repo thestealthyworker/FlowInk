@@ -118,6 +118,63 @@ a.guessed-label:hover {
   color: var(--color-ink);
 }
 
+/* Integration notices (WP3, design/optional-integrations.md): the same
+   persistent-status-strip shape as .silent-source-banner above, split
+   into three tones so absence of an optional integration renders
+   honestly instead of each page inventing its own banner. Weight/border
+   colour carry the distinction, same rule as everywhere else in this
+   file — never colour alone (icon shape also differs: triangle for
+   serious/notice, plain circle for calm). */
+.integration-notice-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.integration-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-hairline);
+}
+
+.integration-notice__icon {
+  flex-shrink: 0;
+  margin-top: 0.1em;
+}
+
+.integration-notice__body p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+.integration-notice__body p + p {
+  margin-top: var(--space-1);
+}
+
+/* serious: a real capability gap (e.g. no dead-man's-switch at all). */
+.integration-notice--serious {
+  background: color-mix(in oklch, var(--color-serious) 14%, var(--color-surface));
+  border-color: var(--color-serious);
+}
+
+/* notice: a chosen-or-not-yet-done state that still changes what the
+   operator sees (e.g. automatic ingestion off — totals may be incomplete). */
+.integration-notice--notice {
+  background: color-mix(in oklch, var(--color-warning) 14%, var(--color-surface));
+  border-color: var(--color-warning);
+}
+
+/* calm: expected, not a warning — e.g. everything provisional because
+   statement reconciliation was never configured. */
+.integration-notice--calm {
+  background: var(--color-surface-sunk);
+  border-color: var(--color-hairline);
+}
+
 /* Period-pending row: a distinct line item, excluded from period maths,
    with a manual-override affordance. Built per §4/§7 item 3 as a
    forward-looking primitive — the rules engine does not emit this state
