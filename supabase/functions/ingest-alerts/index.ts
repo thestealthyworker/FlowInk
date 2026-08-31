@@ -37,6 +37,11 @@ import {
 import { calendarMonth, resolvePeriodKey } from "../_shared/period.ts";
 import { pingFail, pingLog } from "../_shared/healthchecks.ts";
 import { mapWithConcurrency } from "../_shared/concurrency.ts";
+import {
+  buildLabelClause,
+  buildLabelIdToMethod,
+  senderDomainIsTrusted,
+} from "../_shared/routing.ts";
 
 const BATCH_CAP = 20;
 // Gmail fetches are I/O, not CPU (§2 budget note), but each of them still
@@ -45,31 +50,24 @@ const BATCH_CAP = 20;
 const MESSAGE_FETCH_CONCURRENCY = 5;
 
 // Routes by Gmail label, not by parsing the issuer from the body (§7).
-const LABEL_TO_METHOD: Record<string, string> = {
-  "Payments/UOB": "uob_one",
-  "Payments/Citi": "citi_cashback",
-  "Payments/HSBC": "hsbc_revo",
-  "Payments/PayLah": "paylah",
-};
-
+// WP2 (design/ingestion-routing.md): this used to be a hardcoded
+// LABEL_TO_METHOD constant here, requiring a source edit and a redeploy to
+// add a card. It is now read from `payment_methods.alert_label` at request
+// time (see the `methods` query below and `buildLabelIdToMethod`) — the
+// same routing decision, sourced from the one place a user can edit
+// without touching code.
+//
 // §4 trap 3 / item 3: routing on last4 + a Payments/* label alone is not
 // enough — the label only proves the mail landed under a Gmail filter, and
 // a filter can be spoofed by anyone who can get a lookalike domain past
 // the recipient's own rules. Cross-check the actual `From` domain against
-// an EXACT allowlist per method before trusting anything the model or the
-// label say. Substring/contains matching is unsafe:
+// an EXACT allowlist per method (now `payment_methods.alert_senders`,
+// possibly more than one domain per method) before trusting anything the
+// model or the label say. Substring/contains matching is unsafe:
 // `unialerts@uobgroup.com.attacker.io` contains "uobgroup.com" and is the
-// attacker's own domain, which passes DMARC for itself.
-//
-// Confirmed senders, §4 / §5, August 2026 samples. citi_cashback has no
-// confirmed sender yet (card not issued, §12 item 4) — deliberately
-// omitted rather than guessed. Add it here the day the first real Citi
-// alert is captured, not before.
-const SENDER_DOMAINS: Record<string, string> = {
-  hsbc_revo: "notification.hsbc.com.hk",
-  uob_one: "uobgroup.com",
-  paylah: "dbs.com",
-};
+// attacker's own domain, which passes DMARC for itself — see
+// `senderDomainIsTrusted` below, and its regression tests in
+// `routing_test.ts`.
 
 Deno.serve(async (req) => {
   const authError = await requireCronAuth(req);
@@ -85,9 +83,16 @@ Deno.serve(async (req) => {
   if (stateErr) return new Response(`ingest_state read failed: ${stateErr.message}`, { status: 500 });
   const watermark: number = state.watermark;
 
+  // WP2: alert_label / alert_senders were LABEL_TO_METHOD / SENDER_DOMAINS
+  // module constants until this change — now fetched here alongside the
+  // other per-method fields, so routing config lives in one editable place
+  // (payment_methods) instead of a source file that needs a redeploy. A
+  // failure reading this table fails the whole request closed (the
+  // existing `return new Response(..., 500)` below) rather than falling
+  // back to any cached or default routing table — never fail open.
   const { data: methods, error: methodsErr } = await db
     .from("payment_methods")
-    .select("id, last4, period_type, cycle_day, active");
+    .select("id, last4, period_type, cycle_day, active, alert_label, alert_senders");
   if (methodsErr) return new Response(`payment_methods read failed: ${methodsErr.message}`, { status: 500 });
 
   const { data: merchantRows, error: merchantErr } = await db
@@ -98,11 +103,7 @@ Deno.serve(async (req) => {
 
   const accessToken = await getAccessToken();
   const labelNameToId = await getLabelNameToId(accessToken);
-  const labelIdToMethod: Record<string, string> = {};
-  for (const [name, methodId] of Object.entries(LABEL_TO_METHOD)) {
-    const id = labelNameToId[name];
-    if (id) labelIdToMethod[id] = methodId;
-  }
+  const labelIdToMethod = buildLabelIdToMethod(methods, labelNameToId);
 
   // Small overlap on the `after:` boundary (Gmail's after: is date/second
   // granularity, not exclusive-of-watermark) — de-duped by internalDate
@@ -116,11 +117,11 @@ Deno.serve(async (req) => {
   // all along; this query could never see what they labelled, and it failed
   // silently — no error, no parse_failure, watermark simply never advancing.
   //
-  // Build the OR-set from LABEL_TO_METHOD so a new card cannot be added to the
-  // routing table and forgotten here.
-  const labelClause = Object.keys(LABEL_TO_METHOD)
-    .map((name) => `label:${name.replace(/ /g, "-")}`)
-    .join(" OR ");
+  // Build the OR-set from the fetched payment_methods rows (buildLabelClause,
+  // _shared/routing.ts) so a new card's alert_label cannot be configured and
+  // forgotten here — this query and labelIdToMethod above are now built
+  // from the exact same source.
+  const labelClause = buildLabelClause(methods);
   const query = `{${labelClause}} after:${Math.max(afterSeconds, 0)}`;
 
   // Generous paging limits: real volume here is ~100 txns/month (§8 cost
@@ -261,7 +262,15 @@ Deno.serve(async (req) => {
   );
 });
 
-type PaymentMethodRow = { id: string; last4: string | null; period_type: "calendar" | "statement"; cycle_day: number | null; active: boolean };
+type PaymentMethodRow = {
+  id: string;
+  last4: string | null;
+  period_type: "calendar" | "statement";
+  cycle_day: number | null;
+  active: boolean;
+  alert_label: string | null;
+  alert_senders: string[] | null;
+};
 
 type ProcessOutcome =
   | { kind: "inserted" }
@@ -300,12 +309,18 @@ async function processMessage(
     // §4 trap 3 / item 3: the label identifies the issuer, not the sender.
     // Cross-check the From header's exact domain before trusting anything
     // routed off it. Missing config for a method (e.g. citi_cashback,
-    // sender not yet confirmed) is treated the same as a mismatch — an
-    // unverifiable sender is not a verified one.
-    const expectedDomain = SENDER_DOMAINS[methodId];
+    // sender not yet confirmed — alert_senders is NULL for it) is treated
+    // the same as a mismatch — an unverifiable sender is not a verified
+    // one. `senderDomainIsTrusted` (_shared/routing.ts) is the array-aware
+    // generalisation of what used to be a single `===` here; see its
+    // doc comment and routing_test.ts for why this is not weaker.
+    const expectedDomains = method.alert_senders;
     const actualDomain = senderDomain(msg.from);
-    if (!expectedDomain || actualDomain !== expectedDomain) {
-      const reason = `sender domain '${actualDomain ?? "(unparseable)"}' does not match the confirmed sender for '${methodId}' ('${expectedDomain ?? "(none configured)"}') — possible spoof or unconfigured method`;
+    if (!senderDomainIsTrusted(actualDomain, expectedDomains)) {
+      const expectedDesc = expectedDomains && expectedDomains.length > 0
+        ? expectedDomains.join(", ")
+        : "(none configured)";
+      const reason = `sender domain '${actualDomain ?? "(unparseable)"}' does not match a confirmed sender for '${methodId}' ('${expectedDesc}') — possible spoof or unconfigured method`;
       await recordFailure(db, msg.id, msg.bodyText, null, reason);
       return { kind: "permanent_failure", reason };
     }

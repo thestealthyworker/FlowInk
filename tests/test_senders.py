@@ -14,6 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from lib.senders import (  # noqa: E402
+    DEFAULT_STATEMENT_SENDER_DOMAINS,
+    domains_from_payment_methods,
     gmail_sender_prefilter,
     method_id_for_sender,
     parse_domain_map,
@@ -169,3 +171,140 @@ def test_gmail_sender_prefilter_builds_or_clause():
     assert clause.startswith("(") and clause.endswith(")")
     for domain in DEFAULT_MAP:
         assert f"from:{domain}" in clause
+
+
+# ---------- WP2 (design/ingestion-routing.md): domains_from_payment_methods ----------
+#
+# The statement path's routing table used to come from ONE place:
+# DEFAULT_STATEMENT_SENDER_DOMAINS, hardcoded here. It now comes from
+# payment_methods.statement_senders, read live via domains_from_payment_methods()
+# — the same table the alert path (TS) reads for alert_senders. These tests
+# use a minimal fake db (only the .select() shape senders.py actually
+# calls) rather than a real SupabaseREST/network client, per this file's own
+# "no network" framing.
+
+
+class FakeDB:
+    """Minimal stand-in for lib.supabase_rest.SupabaseREST: only the
+    .select(table, params) -> list[dict] shape domains_from_payment_methods()
+    actually uses."""
+
+    def __init__(self, rows: list[dict]):
+        self._rows = rows
+
+    def select(self, table: str, params: dict) -> list[dict]:
+        assert table == "payment_methods"
+        return self._rows
+
+
+def test_domains_from_payment_methods_builds_mapping_from_rows():
+    db = FakeDB([
+        {"id": "uob_one", "statement_senders": ["uobgroup.com"]},
+        {"id": "hsbc_revo", "statement_senders": ["hsbc.com.sg"]},
+        # Citi: multiple candidate domains for one method, same shape the
+        # old hardcoded table already needed.
+        {"id": "citi_cashback", "statement_senders": ["citibank.com.sg", "citi.com"]},
+    ])
+    assert domains_from_payment_methods(db) == {
+        "uobgroup.com": "uob_one",
+        "hsbc.com.sg": "hsbc_revo",
+        "citibank.com.sg": "citi_cashback",
+        "citi.com": "citi_cashback",
+    }
+
+
+def test_domains_from_payment_methods_excludes_method_with_null_statement_senders():
+    # PayLah has no statement source, today and after this change — a
+    # method whose statement_senders is NULL contributes nothing to the
+    # map, exactly like its absence from the old hardcoded table.
+    db = FakeDB([
+        {"id": "uob_one", "statement_senders": ["uobgroup.com"]},
+        {"id": "paylah", "statement_senders": None},
+    ])
+    mapping = domains_from_payment_methods(db)
+    assert "paylah" not in mapping.values()
+    assert mapping == {"uobgroup.com": "uob_one"}
+
+
+def test_domains_from_payment_methods_excludes_method_with_empty_statement_senders_array():
+    # The empty-array shape must behave identically to NULL: excluded, not
+    # a wildcard or an accidental match-everything.
+    db = FakeDB([{"id": "citi_cashback", "statement_senders": []}])
+    assert domains_from_payment_methods(db) == {}
+
+
+def test_domains_from_payment_methods_ignores_malformed_domain_in_a_db_row():
+    # DB rows are not blindly trusted just because they came from the
+    # database instead of an env var: the same _DOMAIN_RE validation
+    # parse_domain_map() applies to the env-var path also applies here.
+    db = FakeDB([
+        {"id": "uob_one", "statement_senders": ["uobgroup.com", "not a domain!!", ""]},
+    ])
+    assert domains_from_payment_methods(db) == {"uobgroup.com": "uob_one"}
+
+
+def test_domains_from_payment_methods_empty_table_returns_empty_mapping_not_an_error():
+    # A fresh deployment with no routing configured yet is a valid state,
+    # not a failure — distinguished from a DB read failure by NOT catching
+    # exceptions inside domains_from_payment_methods() at all (see its
+    # docstring): this test's FakeDB simply returns no rows, it never
+    # raises.
+    assert domains_from_payment_methods(FakeDB([])) == {}
+
+
+def test_domains_from_payment_methods_propagates_a_db_read_failure_rather_than_silently_falling_back():
+    class ExplodingDB:
+        def select(self, table, params):
+            raise RuntimeError("simulated network failure")
+
+    try:
+        domains_from_payment_methods(ExplodingDB())
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError(
+            "expected domains_from_payment_methods to propagate the DB failure, "
+            "not swallow it into an empty/default mapping"
+        )
+
+
+def test_method_id_for_sender_rejects_lookalike_subdomain_even_when_domain_map_is_db_sourced():
+    # The critical regression, restated against a DB-built map instead of
+    # a hardcoded one: moving the source of the allowlist to the database
+    # must not reopen the substring/lookalike hole. Exact match is a
+    # property of sender_domain()/method_id_for_sender(), not of where the
+    # map's data came from.
+    db = FakeDB([{"id": "uob_one", "statement_senders": ["uobgroup.com"]}])
+    domain_map = domains_from_payment_methods(db)
+    assert method_id_for_sender("statements@uobgroup.com", domain_map) == "uob_one"
+    assert method_id_for_sender("statements@uobgroup.com.attacker.io", domain_map) is None
+
+
+def test_statement_sender_domains_uses_db_when_supplied_and_no_env_override():
+    # The production path as of WP2: no env override configured, so the
+    # live DB read becomes the default — NOT the hardcoded
+    # DEFAULT_STATEMENT_SENDER_DOMAINS constant, which would reintroduce
+    # the exact drift this change removes.
+    db = FakeDB([{"id": "example_card", "statement_senders": ["example.com"]}])
+    result = statement_sender_domains({}, db=db)
+    assert result == {"example.com": "example_card"}
+    assert result != DEFAULT_STATEMENT_SENDER_DOMAINS
+
+
+def test_statement_sender_domains_env_override_still_wins_over_a_supplied_db():
+    # STATEMENT_SENDER_DOMAINS remains a local/CI escape hatch layered on
+    # top of the DB source, per design/ingestion-routing.md — it must
+    # still take priority even when a db client is available, so a
+    # developer can override routing locally without needing a live DB
+    # connection or touching production data.
+    db = FakeDB([{"id": "uob_one", "statement_senders": ["uobgroup.com"]}])
+    env = {"STATEMENT_SENDER_DOMAINS": "example.com=hsbc_revo"}
+    assert statement_sender_domains(env, db=db) == {"example.com": "hsbc_revo"}
+
+
+def test_statement_sender_domains_falls_back_to_hardcoded_default_with_no_env_and_no_db():
+    # Backward-compatible fallback for callers with no DB client at all
+    # (pure offline tests, mainly — ingest_statements.py always passes a
+    # db in production, so this branch is not the production path).
+    assert statement_sender_domains({}) == DEFAULT_STATEMENT_SENDER_DOMAINS
+    assert statement_sender_domains({}) == DEFAULT_MAP

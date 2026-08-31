@@ -15,18 +15,34 @@ The Gmail ``from:`` operator is token-based and also matches lookalike
 subdomains, so the query built here is only a cheap pre-filter. The
 authoritative check is :func:`method_id_for_sender`, applied to every
 message after it is fetched.
+
+WP2 (design/ingestion-routing.md): this module's mapping used to be a
+single hardcoded ``DEFAULT_STATEMENT_SENDER_DOMAINS`` dict — the *only*
+routing table the statement path knew, and one that had already drifted
+from the alert path's (TS) ``SENDER_DOMAINS``: this file additionally
+guessed ``citibank.com.sg``/``citi.com`` for Citi, which the TS side
+deliberately omitted. :func:`statement_sender_domains` now reads
+``payment_methods.statement_senders`` live via the caller's
+``SupabaseREST`` client (the same one ``ingest_statements.py`` already
+constructs) when one is supplied — that is the actual production default
+now, and it is the *same table* ``ingest-alerts/index.ts`` reads for the
+alert path's ``alert_senders``. ``DEFAULT_STATEMENT_SENDER_DOMAINS`` below
+is kept only as a fallback for callers with no DB client available (pure
+offline unit tests, mainly) — ``ingest_statements.py`` always passes a
+``db``, so this fallback is never reached in production.
 """
 from __future__ import annotations
 
 import os
 import re
 from email.utils import getaddresses
+from typing import Protocol
 
-# domain -> payment_methods.id. Exact match only.
-# Citi's real statement sender is unknown until the card is issued (§13
-# item 2); both published Citibank Singapore domains are listed so the
-# route exists the day it arrives, and STATEMENT_SENDER_DOMAINS can add
-# more without a code change if the real one differs.
+# Fallback only — see module docstring. NOT the production source of
+# truth any more; that is payment_methods.statement_senders, read via
+# domains_from_payment_methods() below. Used when statement_sender_domains()
+# is called with no env override and no db client (offline/pure-logic
+# tests, or a caller that hasn't been wired up to a db client yet).
 DEFAULT_STATEMENT_SENDER_DOMAINS: dict[str, str] = {
     "uobgroup.com": "uob_one",
     "citibank.com.sg": "citi_cashback",
@@ -41,6 +57,74 @@ DEFAULT_STATEMENT_SENDER_DOMAINS: dict[str, str] = {
 _DOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 _ENV_VAR = "STATEMENT_SENDER_DOMAINS"
+
+
+def is_valid_domain_syntax(domain: str) -> bool:
+    """Domain-SYNTAX validator: is ``domain`` shaped like a plausible DNS
+    hostname? This is NOT a trust/routing decision — a syntactically valid
+    domain (e.g. ``uobgroup.com.attacker.io``) can still be exactly the
+    lookalike-subdomain attack this module's docstring describes; that is
+    rejected separately, by exact-match allowlist comparison in
+    :func:`method_id_for_sender`, not by this function.
+
+    Exposed as a public function (unlike the underlying ``_DOMAIN_RE`` it
+    wraps) so both this module's own callers and the onboarding-wizard
+    input-validation path (design/onboarding.md) use the identical check,
+    and so it can be asserted against the shared
+    ``tests/fixtures/domain-validation-cases.json`` cases alongside its
+    TypeScript port (``routing.ts``'s ``isValidDomainSyntax``) — see WP2
+    (design/ingestion-routing.md §3).
+
+    Expects an already-lowercased, already-trailing-dot-stripped input,
+    matching how every existing call site in this module normalises before
+    matching (this function does not normalise for you).
+    """
+    return bool(_DOMAIN_RE.match(domain))
+
+
+class _SupportsSelect(Protocol):
+    """The one method domains_from_payment_methods() needs from a db
+    client — structural, not a hard dependency on lib.supabase_rest, so a
+    test can pass any object (even a plain fake) that shapes up like this."""
+
+    def select(self, table: str, params: dict[str, object]) -> list[dict]: ...
+
+
+def domains_from_payment_methods(db: _SupportsSelect) -> dict[str, str]:
+    """Build ``{domain: method_id}`` from ``payment_methods.statement_senders``.
+
+    This is the single source of truth ``ingest_statements.py`` reads by
+    default (via :func:`statement_sender_domains`) — the same table
+    ``ingest-alerts/index.ts`` reads for the alert path's
+    ``alert_senders``, closing the drift this module's docstring
+    describes.
+
+    A DB read failure (network error, bad credentials, ...) is allowed to
+    propagate rather than being swallowed into an empty mapping: silently
+    falling back to a stale hardcoded table here would reintroduce exactly
+    the drift this change exists to remove, and silently returning ``{}``
+    on a genuine outage would be indistinguishable from "no cards
+    configured yet", which is itself a real, valid state this function can
+    return (a fresh deployment with no routing configured at all). The
+    caller (``ingest_statements.py``) fails loudly (non-zero exit) on an
+    unhandled exception here, which is correct: this is a startup-time
+    dependency, not a per-message one.
+
+    A method row with a null/missing ``statement_senders`` (e.g. PayLah,
+    which has no statement source at all) contributes nothing — exactly
+    today's behaviour, where such a method is simply absent from the map.
+    """
+    rows = db.select("payment_methods", {"select": "id,statement_senders"})
+    mapping: dict[str, str] = {}
+    for row in rows:
+        method_id = row.get("id")
+        if not method_id:
+            continue
+        for raw_domain in row.get("statement_senders") or []:
+            domain = (raw_domain or "").strip().lower().rstrip(".")
+            if domain and _DOMAIN_RE.match(domain):
+                mapping[domain] = method_id
+    return mapping
 
 
 def parse_domain_map(raw: str) -> dict[str, str]:
@@ -62,14 +146,35 @@ def parse_domain_map(raw: str) -> dict[str, str]:
     return mapping
 
 
-def statement_sender_domains(env: dict[str, str] | None = None) -> dict[str, str]:
-    """The active allowlist. ``STATEMENT_SENDER_DOMAINS`` replaces the default."""
+def statement_sender_domains(
+    env: dict[str, str] | None = None,
+    db: _SupportsSelect | None = None,
+) -> dict[str, str]:
+    """The active allowlist.
+
+    Priority order:
+
+    1. ``STATEMENT_SENDER_DOMAINS`` env var, if set and parses to at least
+       one valid entry — a deploy-time escape hatch for local/CI testing
+       without touching the database, kept exactly as before.
+    2. Otherwise, if a ``db`` client is supplied: a live read of
+       ``payment_methods.statement_senders`` (:func:`domains_from_payment_methods`)
+       — the production default as of WP2 (design/ingestion-routing.md).
+       ``ingest_statements.py`` always passes ``db``, so this is the path
+       every real run takes.
+    3. Otherwise (no env override, no db client): the hardcoded
+       :data:`DEFAULT_STATEMENT_SENDER_DOMAINS` fallback, for callers that
+       have no database available — mainly pure offline unit tests.
+    """
     env = os.environ if env is None else env
     raw = (env.get(_ENV_VAR) or "").strip()
-    if not raw:
-        return dict(DEFAULT_STATEMENT_SENDER_DOMAINS)
-    parsed = parse_domain_map(raw)
-    return parsed or dict(DEFAULT_STATEMENT_SENDER_DOMAINS)
+    if raw:
+        parsed = parse_domain_map(raw)
+        if parsed:
+            return parsed
+    if db is not None:
+        return domains_from_payment_methods(db)
+    return dict(DEFAULT_STATEMENT_SENDER_DOMAINS)
 
 
 def sender_domain(from_header: str | None) -> str | None:

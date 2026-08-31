@@ -1,0 +1,30 @@
+{
+  "$comment": "WP2 (design/ingestion-routing.md §3). Shared domain-SYNTAX validation cases, asserted against by both the Python implementation (scripts/lib/senders.py's is_valid_domain_syntax, wrapping _DOMAIN_RE) and its TypeScript port (supabase/functions/_shared/routing.ts's isValidDomainSyntax). The two runtimes cannot share code here (README.md's 'four runtimes, four stores' framing already accepts this kind of duplication elsewhere) — this file is the shared source of TRUTH for what each implementation must accept or reject, so they cannot silently drift the way LABEL_TO_METHOD and DEFAULT_STATEMENT_SENDER_DOMAINS already did before this change. Run: tests/test_domain_validation_fixture.py (pytest) and supabase/functions/_shared/domain_validation_test.ts (deno test).",
+  "$contract": "The input is assumed already lowercased and with any trailing dot stripped, matching how every call site in this codebase uses the underlying regex today (senders.py's parse_domain_map/sender_domain lowercase and rstrip('.') before matching) — this fixture tests the regex's own boundary, not that normalisation step.",
+  "cases": [
+    { "domain": "uobgroup.com", "valid": true, "note": "a real confirmed sender domain (uob_one)" },
+    { "domain": "notification.hsbc.com.hk", "valid": true, "note": "a real confirmed sender domain (hsbc_revo), multi-label subdomain" },
+    { "domain": "citibank.com.sg", "valid": true, "note": "a real configured statement domain (citi_cashback)" },
+    { "domain": "dbs.com", "valid": true, "note": "a real confirmed sender domain (paylah)" },
+    { "domain": "a.io", "valid": true, "note": "minimal two-label domain, single-char label" },
+    { "domain": "sub.sub.example.com", "valid": true, "note": "deep multi-label subdomain is syntactically fine on its own" },
+    { "domain": "xn--80ak6aa92e.com", "valid": true, "note": "ASCII punycode encoding of a non-ASCII domain is syntactically valid ASCII — punycode is exactly how a homoglyph domain is supposed to be represented in DNS/allowlists, so this must pass syntax validation; it is the RAW UNICODE form that must be rejected (see the Cyrillic case below)" },
+    {
+      "domain": "uobgroup.com.attacker.io",
+      "valid": true,
+      "note": "SECURITY: this is the exact lookalike-subdomain attack from build spec §4 trap 3 / senders.py's module docstring — attacker.io legitimately owns this domain and it IS syntactically a valid domain string. Domain-SYNTAX validation correctly accepts it: syntax validity is not the security control. The control is the separate EXACT-MATCH allowlist check (senders.py's method_id_for_sender, routing.ts's senderDomainIsTrusted) which must reject it because it is not string-equal to any configured domain like 'uobgroup.com'. See tests/test_senders.py::test_method_id_for_sender_rejects_uobgroup_com_attacker_io and routing_test.ts's matching case for that separate, load-bearing assertion — do not 'fix' this fixture entry to false, that would test the wrong layer."
+    },
+    { "domain": "", "valid": false, "note": "empty string" },
+    { "domain": "localhost", "valid": false, "note": "single label, no dot — this regex requires at least one dot-separated label" },
+    { "domain": "uobgroup.com.", "valid": false, "note": "trailing dot not stripped — callers must rstrip('.') first, the validator itself does not normalise" },
+    { "domain": "-uobgroup.com", "valid": false, "note": "label cannot start with a hyphen" },
+    { "domain": "uobgroup-.com", "valid": false, "note": "label cannot end with a hyphen" },
+    { "domain": "uob group.com", "valid": false, "note": "space is never valid in a DNS label" },
+    { "domain": "uobgroup..com", "valid": false, "note": "empty label between consecutive dots" },
+    { "domain": "UOBGROUP.COM", "valid": false, "note": "uppercase — the validator is lowercase-only by construction; callers lowercase before calling, per $contract above" },
+    { "domain": "аttacker.io", "valid": false, "note": "SECURITY: Cyrillic 'а' (U+0430) homoglyph, not ASCII 'a' — visually near-identical to attacker.io but must never be accepted or normalised to it. This is the case senders.py's own module comment on _DOMAIN_RE calls out by name." },
+    { "domain": "uobgroup.com/evil", "valid": false, "note": "path-like suffix, not a bare domain" },
+    { "domain": "uobgroup.com evil.com", "valid": false, "note": "two domains concatenated with a space — must not be accepted as one" },
+    { "domain": "javascript:alert(1)", "valid": false, "note": "not a domain at all — defence against an onboarding-wizard input field being used for injection rather than a domain" }
+  ]
+}
