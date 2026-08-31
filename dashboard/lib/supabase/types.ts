@@ -112,6 +112,10 @@ export interface PaymentMethod {
   // ISO 4217 home currency (0014_ingestion_routing_as_data.sql) — used to
   // render a wallet/no-rules method's own figures without assuming SGD.
   currency: string;
+  // 0018_config_review.sql — true only for a row load_example_data_singapore()
+  // inserted. Drives ExampleDataControls' load-vs-clear state; never set
+  // any other way from the dashboard.
+  is_example: boolean;
 }
 
 // ============ card_period_status() / card_dashboard_status() contract ============
@@ -252,4 +256,97 @@ export interface CardDashboardStatusRow {
   method_id: string;
   display_name: string;
   status: CardPeriodStatus;
+}
+
+// ============ method_rules review/provenance contract (WP5, 0018_config_review.sql) ============
+// See that migration's header for the authoritative contract WP7 writes
+// to. Mirrored here as a read shape for the review queue / rule editor —
+// every write to this table goes through submit_method_rule() /
+// edit_method_rule() / approve_method_rule() / reject_method_rule()
+// (lib/actions/config.ts), never a direct .update()/.insert() on the
+// table, for the same "one validated path" reason those RPCs exist.
+
+export type RuleType = "min_spend" | "tier" | "category_rate" | "cap" | "txn_count" | "quarterly_gate";
+export type RuleStatus = "active" | "pending_review" | "rejected";
+export type ProposedBy = "operator" | "ai";
+
+/** Free-shape per 0018's own comment on source_citations — a reviewer-facing
+ * element renders whatever subset of these three is present. */
+export interface SourceCitation {
+  title?: string;
+  url?: string;
+  quote?: string;
+  [key: string]: unknown;
+}
+
+export interface MethodRule {
+  id: number;
+  method_id: string;
+  rule_type: RuleType;
+  categories: Category[] | null;
+  threshold: string | null; // numeric over PostgREST comes back as a string
+  rate: string | null;
+  cap_amount: string | null;
+  payout: string | null;
+  txn_min: number | null;
+  priority: number;
+  valid_from: string;
+  valid_to: string | null;
+  notes: string | null;
+  cap_basis: "reward" | "spend" | null;
+  reward_form: "rate" | "fixed_payout" | null;
+  gate_scope: "tier_only" | "all_rewards" | null;
+  credit_block_size: string | null;
+  credit_floor: string | null;
+  estimate_caveat: string | null;
+  condition_key: string | null;
+  status: RuleStatus;
+  proposed_by: ProposedBy;
+  source_citations: SourceCitation[] | null;
+  ai_rationale: string | null;
+  ai_confidence: number | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+}
+
+/** submit_method_rule()'s full parameter surface — the one insert path
+ * WP7 and the dashboard's own "propose/correct a rule" forms both call.
+ * See 0018_config_review.sql's header for the status-derivation
+ * invariant (never settable by any field here). */
+export interface SubmitMethodRuleInput {
+  p_method_id: string;
+  p_rule_type: RuleType;
+  p_categories: Category[] | null;
+  p_threshold: number | null;
+  p_rate: number | null;
+  p_cap_amount: number | null;
+  p_payout: number | null;
+  p_txn_min: number | null;
+  p_priority: number;
+  p_valid_from: string;
+  p_valid_to?: string | null;
+  p_notes?: string | null;
+  p_cap_basis?: "reward" | "spend" | null;
+  p_reward_form?: "rate" | "fixed_payout" | null;
+  p_gate_scope?: "tier_only" | "all_rewards" | null;
+  p_credit_block_size?: number | null;
+  p_credit_floor?: number | null;
+  p_estimate_caveat?: string | null;
+  p_condition_key?: string | null;
+  p_proposed_by?: ProposedBy;
+  p_source_citations?: SourceCitation[] | null;
+  p_ai_rationale?: string | null;
+  p_ai_confidence?: number | null;
+}
+
+/** preview_method_rule()'s return shape — evaluate_period() run twice for
+ * the same real period, once as today's live config and once with this
+ * one pending row hypothetically active. Never committed (0018). */
+export interface RulePreview {
+  rule_id: number;
+  method_id: string;
+  period_key: string;
+  without_rule: CardPeriodStatus;
+  with_rule: CardPeriodStatus;
 }

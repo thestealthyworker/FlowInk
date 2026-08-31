@@ -3,6 +3,7 @@ import { BottomTabBar } from "@/components/nav/BottomTabBar";
 import { TopNav } from "@/components/nav/TopNav";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signOut } from "@/lib/actions/auth";
+import { countPendingRules } from "@/lib/data/methodRules";
 import { listGuessedMerchantIds } from "@/lib/data/merchants";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,7 +15,10 @@ import { createClient } from "@/lib/supabase/server";
 // exactly one of that menu's three options (manual entry).
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  const guessedIds = await listGuessedMerchantIds(supabase);
+  const [guessedIds, reviewBadge] = await Promise.all([
+    listGuessedMerchantIds(supabase),
+    countPendingRules(supabase),
+  ]);
 
   return (
     <div className="shell">
@@ -23,7 +27,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
           <span className="topbar__brand">FlowInk</span>
           <span className="topbar__brand-sub">Personal Ledger</span>
         </span>
-        <TopNav triageBadge={guessedIds.size} />
+        <TopNav triageBadge={guessedIds.size} reviewBadge={reviewBadge} />
         <div className="topbar__actions">
           <ThemeToggle />
           <form action={signOut} className="topbar__signout">
@@ -34,7 +38,7 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
 
       <main className="shell__content">{children}</main>
 
-      <BottomTabBar triageBadge={guessedIds.size} />
+      <BottomTabBar triageBadge={guessedIds.size} reviewBadge={reviewBadge} />
     </div>
   );
 }

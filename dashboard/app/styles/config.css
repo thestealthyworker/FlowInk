@@ -1,0 +1,318 @@
+/* Config review & edit surface (WP5): review queue, payment method list,
+   example-data controls. Reuses forms.css's .page-header/.page-section/
+   .empty-state/.entry-form/.form-hint/.confirm-btn rather than
+   redefining them — only shapes specific to this page live here. */
+
+.config-page {
+  max-width: 56rem;
+}
+
+/* ---- review queue ---- */
+
+.review-queue {
+  display: grid;
+  gap: var(--space-6);
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.review-card {
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-left: 3px solid var(--color-warning);
+}
+
+.review-card__eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-muted);
+}
+
+.review-card__claim {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+}
+
+.review-card__period {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  font-family: var(--font-money);
+}
+
+.review-card__provenance {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-control);
+}
+
+.review-card__provenance-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.review-card__rationale {
+  margin: 0 0 var(--space-2);
+  font-style: italic;
+  font-family: var(--font-voice);
+  color: var(--color-ink-secondary);
+}
+
+.review-card__no-source {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-serious);
+}
+
+.review-card__citations {
+  margin: 0;
+  padding-left: 1.1em;
+  font-size: var(--text-sm);
+}
+
+.review-card__quote {
+  color: var(--color-ink-muted);
+}
+
+.review-card__edit {
+  margin: var(--space-4) 0;
+  font-size: var(--text-sm);
+}
+
+.review-card__edit summary {
+  cursor: pointer;
+  color: var(--color-ink-secondary);
+}
+
+.review-card__decision {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-hairline);
+}
+
+@media (min-width: 640px) {
+  .review-card__decision {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.review-card__decision-form {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.review-card__approve {
+  background: var(--color-good);
+  border-color: var(--color-good);
+  color: var(--color-accent-ink);
+}
+
+.review-card__approve:hover {
+  background: color-mix(in oklch, var(--color-good) 85%, black);
+}
+
+/* ---- rule effect preview ---- */
+
+.rule-preview {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px dashed var(--color-baseline);
+  border-radius: var(--radius-control);
+}
+
+.rule-preview__period {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.rule-preview__totals {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.rule-preview__figure {
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-preview__figure-label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+
+.rule-preview__figure-value {
+  font-family: var(--font-money);
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.rule-preview__arrow {
+  color: var(--color-ink-muted);
+}
+
+.rule-preview__delta {
+  font-family: var(--font-money);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  padding: 0.1em 0.5em;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunk);
+}
+
+.rule-preview__delta--up {
+  color: var(--color-good);
+}
+
+.rule-preview__delta--down {
+  color: var(--color-serious);
+}
+
+.rule-preview__note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.rule-preview__track-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.1em;
+  font-size: var(--text-sm);
+}
+
+/* ---- payment method list ---- */
+
+.method-list {
+  display: grid;
+  gap: var(--space-4);
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.method-card {
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+}
+
+.method-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.method-card__head h3 {
+  margin: 0;
+}
+
+.method-card__meta {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  font-family: var(--font-money);
+}
+
+.method-card__badge {
+  flex-shrink: 0;
+  padding: 0.15em 0.6em;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-control);
+}
+
+.method-card__badge--active {
+  color: var(--color-good);
+  border-color: var(--color-good);
+}
+
+.method-card__toggle {
+  margin-top: var(--space-3);
+}
+
+.method-card__toggle button {
+  font-size: var(--text-sm);
+}
+
+.method-card__rules {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-sm);
+}
+
+.method-card__rules summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.method-card__rule-list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.method-card__rule {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-control);
+}
+
+.method-card__rule p {
+  margin: 0 0 var(--space-1);
+}
+
+.method-card__rule details summary {
+  cursor: pointer;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-xs);
+}
+
+.rule-edit__categories {
+  border: none;
+  padding: 0;
+  margin: var(--space-2) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.rule-edit__categories legend {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  margin-bottom: var(--space-1);
+}
+
+/* ---- example data controls ---- */
+
+.example-data-controls {
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-baseline);
+  border-radius: var(--radius-control);
+}
+
+.example-data-controls p {
+  margin: 0 0 var(--space-3);
+}
