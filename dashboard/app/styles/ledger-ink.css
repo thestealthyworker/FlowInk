@@ -1,5 +1,4 @@
 /* Literal port of the "Ledger & Ink" artifact's component CSS
-   (private design reference)
    into the app's existing token system — same class shapes and rules as
    the artifact, but referencing app/styles/tokens.css's --color-N and
    --series-N variables (which already carry the artifact's exact oklch

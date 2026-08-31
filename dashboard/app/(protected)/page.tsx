@@ -32,7 +32,7 @@ const LEDGER_PAGE_SIZE = 50;
 const TREND_LEADER_COUNT = 8;
 
 // The single Command Center page (redesign/visuals) — a literal port of
-// the "Ledger & Ink" artifact (private design reference):
+// the "Ledger & Ink" artifact:
 // one page, three anchor-linked sections (Command Center / Trends /
 // Ledger), real Supabase data throughout. The only intentional deviation
 // from the artifact is the "Add" nav item, which links to real separate

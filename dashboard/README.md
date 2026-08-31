@@ -23,6 +23,12 @@ No service role key, no Anthropic key, no Gmail credentials — see
 bundle; both of these are public by design (RLS is the real control, not
 secrecy of these values).
 
+**`npm run build` requires both vars to be set** — it aborts with `Missing
+required environment variable` during static page generation otherwise.
+That is deliberate fail-closed behaviour (`lib/supabase/env.ts`), not a
+defect: set the two values below (copy `.env.local.example` to `.env.local`,
+or export them in the shell/CI) before building.
+
 ## Before this is usable end-to-end
 
 1. `npm install`
