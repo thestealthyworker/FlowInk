@@ -1,0 +1,142 @@
+/* Honest-data-state primitives (§4). Six states, six distinct renderings,
+   reused everywhere a number or a category label appears. Weight and
+   structure carry the distinction — never colour alone. */
+
+.money-figure {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Confirmed: the default. No badge, no styling beyond the base money
+   figure — the absence of a marker IS the signal. */
+
+/* Provisional: italic, dashed underline. Same face, different posture. */
+.money-figure--provisional {
+  font-style: italic;
+  text-decoration: underline dashed;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--color-ink-muted);
+}
+
+.provisional-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+
+.provisional-note__clock {
+  flex-shrink: 0;
+}
+
+/* Guessed category: dotted underline on the label, everywhere the label
+   renders. Tappable — links straight into /triage. */
+.guessed-label {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--color-ink-muted);
+  text-decoration-thickness: 1.5px;
+}
+
+a.guessed-label {
+  color: inherit;
+}
+
+a.guessed-label:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+/* FX-pending tray: never enters a total. A distinct sunk well, never a
+   guessed SGD figure. */
+.fx-tray {
+  background: var(--color-surface-sunk);
+  border: 1px dashed var(--color-baseline);
+  border-radius: var(--radius-control);
+  padding: var(--space-4);
+}
+
+.fx-tray__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  margin: 0 0 var(--space-1);
+}
+
+.fx-tray p {
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
+
+.fx-tray ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fx-tray li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Silent-source banner: a persistent status strip, not a toast. Built as
+   a primitive per §4/§7 item 4 — not yet wired to a live data source
+   until Phase D5 adds the ingest-health read this needs. */
+.silent-source-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.silent-source-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in oklch, var(--color-serious) 14%, var(--color-surface));
+  border: 1px solid var(--color-serious);
+  border-radius: var(--radius-control);
+}
+
+.silent-source-banner__icon {
+  flex-shrink: 0;
+  margin-top: 0.1em;
+}
+
+.silent-source-banner p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+/* Period-pending row: a distinct line item, excluded from period maths,
+   with a manual-override affordance. Built per §4/§7 item 3 as a
+   forward-looking primitive — the rules engine does not emit this state
+   yet, so it is not wired into any live view in this phase. */
+.period-pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-sunk);
+  border-left: 3px solid var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.period-pending-row__tag {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-muted);
+}

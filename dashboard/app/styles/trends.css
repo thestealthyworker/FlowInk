@@ -1,0 +1,203 @@
+/* Trends (Phase D3, View 2) — the rolling 12-month line and the
+   small-multiples category grid. Shared by /trends and /cards/tier-3
+   (TrendLineChart is the same component in both places). */
+
+.trend-chart {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  padding: var(--space-4) var(--space-6) var(--space-6);
+}
+
+.trend-chart__svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.trend-chart__baseline {
+  stroke: var(--color-hairline);
+  stroke-width: 1;
+}
+
+.trend-chart__reference {
+  stroke: var(--color-critical);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.trend-chart__reference-label {
+  font-family: var(--font-money);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--color-critical);
+}
+
+.trend-chart__line {
+  stroke: var(--series-1);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.trend-chart__line--partial {
+  stroke-dasharray: 5 4;
+}
+
+.trend-chart__marker--partial {
+  fill: var(--color-surface);
+  stroke: var(--series-1);
+  stroke-width: 2;
+  stroke-dasharray: 2 1.5;
+}
+
+.trend-chart__fx-note-marker--partial {
+  border-style: dashed;
+  border-color: var(--series-1);
+}
+
+.trend-chart__marker {
+  fill: var(--color-surface);
+  stroke: var(--series-1);
+  stroke-width: 2;
+}
+
+.trend-chart__marker[data-callout] {
+  fill: var(--series-1);
+}
+
+.trend-chart__marker--fx {
+  fill: var(--color-surface);
+  stroke: var(--color-ink-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 1.5;
+}
+
+.trend-chart__month-label {
+  font-family: var(--font-money);
+  font-size: 9px;
+  fill: var(--color-ink-muted);
+}
+
+.trend-chart__callout-label {
+  font-family: var(--font-money);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--color-ink);
+}
+
+.trend-chart__fx-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+
+.trend-chart__fx-note-marker {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  border: 1.5px dashed var(--color-ink-muted);
+  flex-shrink: 0;
+}
+
+.trend-chart__table {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.trend-chart__table summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.trend-chart__table table {
+  margin-top: var(--space-3);
+}
+
+/* ---- category small-multiples grid ---- */
+.spark-grid {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x proximity;
+}
+
+.spark-grid:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.spark-card {
+  flex: 0 0 auto;
+  width: min(46vw, 12rem);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  text-decoration: none;
+  color: inherit;
+}
+
+@media (min-width: 768px) {
+  .spark-card {
+    width: 100%;
+  }
+
+  .spark-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    overflow-x: visible;
+  }
+}
+
+.spark-card:hover,
+.spark-card:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.spark-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.spark-card__swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.spark-card__name {
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+}
+
+.spark-card__svg {
+  width: 100%;
+  height: 2.5rem;
+}
+
+.spark-card__figures {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+}
+
+.spark-card__figures [data-direction="up"] {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.spark-card__figures [data-direction="down"] {
+  color: var(--color-ink-muted);
+}

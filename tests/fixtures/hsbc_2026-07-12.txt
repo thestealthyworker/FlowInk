@@ -1,0 +1,18 @@
+Subject: Transaction Alerts (Credit Card)
+From: HSBC.Bank.Singapore.Limited@notification.hsbc.com.hk
+InternalDate: 2026-07-12T18:41:07+08:00
+
+<html>
+<body>
+<p>Dear Customer,</p>
+<p>This is to inform you of a transaction on your HSBC credit card:</p>
+<table border="1" cellpadding="4">
+  <tr><td>Card Number</td><td>**** **** **** 2222</td></tr>
+  <tr><td>Transaction Date</td><td>12/JUL/2026</td></tr>
+  <tr><td>Transaction Time</td><td>18:40:52</td></tr>
+  <tr><td>Transaction Amount</td><td>SGD214.75</td></tr>
+  <tr><td>Description</td><td>Riverside Home Store</td></tr>
+</table>
+<p>If you did not authorise this transaction, please contact HSBC immediately.</p>
+</body>
+</html>

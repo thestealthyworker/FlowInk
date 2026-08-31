@@ -1,0 +1,208 @@
+/* Breakdown (Phase D3, View 3) — category magnitude bars, merchant
+   leaderboard, period picker. */
+
+.breakdown-page {
+  max-width: 56rem;
+}
+
+.period-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-2);
+  max-width: none;
+}
+
+.period-picker label {
+  margin: 0;
+}
+
+.period-picker input {
+  width: auto;
+}
+
+.period-picker__nav {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+  font-size: var(--text-sm);
+}
+
+.breakdown-period-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  margin: 0 0 var(--space-6);
+}
+
+/* ---- category magnitude bars (View 1's bar mark, cap-independent) ---- */
+.magnitude-bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.magnitude-bar-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  scroll-margin-top: 5rem;
+}
+
+@media (max-width: 480px) {
+  .magnitude-bar-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}
+
+.magnitude-bar-row__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.magnitude-bar-row__swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.magnitude-bar-row__track {
+  height: 0.75rem;
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-bar);
+  overflow: hidden;
+}
+
+.magnitude-bar-row__fill {
+  height: 100%;
+  border-radius: var(--radius-bar);
+  transform-origin: left center;
+  transform: scaleX(var(--pct, 0));
+  animation: bar-reveal var(--duration-normal) var(--ease-out-expo) both;
+  animation-delay: calc(var(--bar-index, 0) * 40ms);
+}
+
+.magnitude-bar-row__value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.magnitude-bar-row__share {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  font-family: var(--font-money);
+}
+
+/* ---- merchant leaderboard ---- */
+.leaderboard {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.leaderboard__row {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(9rem, 16rem) 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .leaderboard__row {
+    grid-template-columns: 1.5rem 1fr;
+    grid-template-areas: "rank name" ". track" ". figures";
+    row-gap: var(--space-1);
+  }
+
+  .leaderboard__track {
+    grid-area: track;
+  }
+
+  .leaderboard__figures {
+    grid-area: figures;
+  }
+}
+
+.leaderboard__rank {
+  font-family: var(--font-money);
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+  text-align: right;
+}
+
+.leaderboard__name {
+  font-weight: 700;
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.leaderboard__guessed-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  border: 1px dotted var(--color-ink-muted);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-ink-muted);
+  text-decoration: none;
+}
+
+.leaderboard__guessed-badge:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.leaderboard__track {
+  height: 0.625rem;
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-bar);
+  overflow: hidden;
+}
+
+.leaderboard__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-ink-secondary);
+  border-radius: var(--radius-bar);
+  transform-origin: left center;
+  transform: scaleX(var(--pct, 0));
+  animation: bar-reveal var(--duration-normal) var(--ease-out-expo) both;
+  animation-delay: calc(var(--bar-index, 0) * 30ms);
+}
+
+.leaderboard__figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.leaderboard__count {
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}

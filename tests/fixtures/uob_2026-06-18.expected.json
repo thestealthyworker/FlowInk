@@ -1,0 +1,9 @@
+{
+  "amount": 412.50,
+  "currency": "USD",
+  "merchant_raw": "Nordkap Optics GmbH",
+  "last4": "1111",
+  "txn_date": "2026-06-18",
+  "txn_type": "purchase",
+  "confidence": "high"
+}

@@ -1,0 +1,7 @@
+Subject: UOB - Transaction Alert
+From: unialerts@uobgroup.com
+InternalDate: 2026-06-18T09:17:24+08:00
+
+A transaction of USD 412.50 was made with your UOB Card ending 1111 on 18/06/26 at Nordkap Optics GmbH.
+
+If you did not perform or authorise this transaction, please contact UOB Card Customer Service immediately at 1800 222 2121. This email is generated automatically and is not to be replied to. UOB will never ask you to reveal your full card number, PIN, CVV or online banking password via email or phone call. Please be vigilant against phishing attempts and report any suspicious activity to UOB without delay. Terms and conditions apply.

@@ -1,0 +1,118 @@
+/* /transactions — the raw, filterable ledger view (redesign/visuals).
+   Built on the shared .page-header / .table-wrap / .data-table / .tag-default
+   primitives from forms.css; only the ledger-specific decoration lives here. */
+
+.ledger-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.ledger-filters__search input {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.ledger-filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ledger-filters__row select,
+.ledger-filters__row input[type="date"] {
+  font-size: var(--text-sm);
+}
+
+.ledger-filters__clear {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}
+
+.ledger-summary {
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.ledger-table-wrap table {
+  min-width: 42rem;
+}
+
+.ledger-table th {
+  font-family: var(--font-heading);
+}
+
+.ledger-table__sort {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ledger-table__sort:hover,
+.ledger-table__sort[aria-current="true"] {
+  color: var(--color-accent);
+}
+
+.ledger-table__num {
+  text-align: right;
+}
+
+.ledger-table__date-heading th {
+  background: var(--color-surface-sunk);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-muted);
+  text-align: left;
+  padding: var(--space-1) var(--space-3);
+}
+
+.ledger-table__date {
+  font-family: var(--font-money);
+  color: var(--color-ink-muted);
+}
+
+.ledger-table__merchant {
+  font-weight: 600;
+}
+
+.ledger-table__card {
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+
+.ledger-table__cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ledger-table__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ledger-table__tag {
+  white-space: nowrap;
+}
+
+.ledger-table__tag--serious {
+  border-color: var(--color-serious);
+  color: var(--color-serious);
+}
+
+.ledger-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-ink-muted);
+}

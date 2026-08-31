@@ -1,0 +1,47 @@
+name: Reconcile
+
+# JOB-3 (docs/cardledger-build-spec.md §7). Runs immediately after
+# Ingest Statements via workflow_run, plus workflow_dispatch as a manual
+# fallback (e.g. re-running reconciliation without re-fetching statements).
+
+on:
+  workflow_run:
+    workflows: ["Ingest Statements"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      # Pinned to a commit SHA, not a mutable tag — see ingest-statements.yml
+      # for why (§11: this job also holds the service_role key).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run reconcile
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Telegram was removed 2026-08-25 (docs/cardledger-build-spec.md §10
+          # AMENDMENT). healthchecks.io is now the only out-of-band alarm —
+          # see scripts/lib/healthchecks.py.
+          HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
+        run: python scripts/reconcile.py

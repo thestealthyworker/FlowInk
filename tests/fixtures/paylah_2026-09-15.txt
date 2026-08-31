@@ -1,0 +1,11 @@
+Subject: Transaction Alerts
+From: paylah.alert@dbs.com
+InternalDate: 2026-09-15T20:14:09+08:00
+
+We refer to your PayLah! Scan & Pay Transfer dated 15 Sep.
+
+Date & Time: 15 Sep 20:14 (SGT)
+Amount: SGD8.50
+From: PayLah! Wallet (Mobile ending 3333)
+To: N.N.HARBOURLIGHT BISTRO PTE. LT
+D.

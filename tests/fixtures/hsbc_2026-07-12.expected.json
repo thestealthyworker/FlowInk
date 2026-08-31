@@ -1,0 +1,9 @@
+{
+  "amount": 214.75,
+  "currency": "SGD",
+  "merchant_raw": "Riverside Home Store",
+  "last4": "2222",
+  "txn_date": "2026-07-12",
+  "txn_type": "purchase",
+  "confidence": "high"
+}

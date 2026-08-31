@@ -1,0 +1,34 @@
+# Secrets — never allow these into git history
+client_secret*.json
+*credentials*.json
+.env
+.env.*
+!.env.example
+!dashboard/.env.local.example
+token.json
+*.pdf
+
+# Local auth staging (Phase 0A(ii) — deleted after secrets are stored)
+cardledger-auth/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Next.js (dashboard/)
+node_modules/
+.next/
+out/
+.vercel/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# OS / editor
+.DS_Store
+*.swp
+.vercel

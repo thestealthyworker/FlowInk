@@ -1,0 +1,9 @@
+{
+  "amount": 8.50,
+  "currency": "SGD",
+  "merchant_raw": "N.N.HARBOURLIGHT BISTRO PTE. LT D.",
+  "last4": "3333",
+  "txn_date": "2026-09-15",
+  "txn_type": "purchase",
+  "confidence": "high"
+}
