@@ -101,6 +101,31 @@ Deno.serve(async (req) => {
   if (merchantErr) return new Response(`merchants read failed: ${merchantErr.message}`, { status: 500 });
   const merchants = merchantRows as MerchantRow[];
 
+  // WP3 optional-integration guard (design/optional-integrations.md,
+  // "Gmail absent" / "Anthropic absent"): a fresh deployment that has
+  // only configured Supabase so far must not crash here. Without this,
+  // getAccessToken() below throws on missing env vars, which Supabase
+  // Cron logs as a failed invocation every 2 minutes forever with no
+  // user-visible signal. Absent-by-choice degrades gracefully — this is
+  // "not set up yet", not a system failure, so no healthchecks ping.
+  if (!Deno.env.get("GMAIL_REFRESH_TOKEN") || !Deno.env.get("GMAIL_CLIENT_ID") || !Deno.env.get("GMAIL_CLIENT_SECRET")) {
+    return new Response(JSON.stringify({ skipped: "Gmail not configured" }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
+  // Anthropic is only actually needed once a message is found to parse,
+  // but checking it here — rather than letting every message in today's
+  // batch fail identically inside parseAlert() — turns N identical
+  // parse_failures rows per tick into one clear, distinct response body
+  // and a single /log ping instead of a wall of indistinguishable
+  // failures accumulating forever.
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) {
+    await escalateLog("ingest-alerts: ANTHROPIC_API_KEY not configured — skipping this tick.");
+    return new Response(JSON.stringify({ skipped: "ANTHROPIC_API_KEY not configured" }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
+
   const accessToken = await getAccessToken();
   const labelNameToId = await getLabelNameToId(accessToken);
   const labelIdToMethod = buildLabelIdToMethod(methods, labelNameToId);
