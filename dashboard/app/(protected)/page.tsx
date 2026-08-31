@@ -202,8 +202,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         }
       : null;
 
-  const uobRing = buildUobRing(cardStatus.find((c) => c.method_id === "uob_one")?.status);
-  const hsbcRing = buildHsbcRing(cardStatus.find((c) => c.method_id === "hsbc_revo")?.status);
+  const cardRings = cardStatus.map((c) => buildCardRing(c.display_name, c.status)).filter((r): r is CommandCenterRing => r !== null);
 
   const previousByCategory = new Map(previousMonthByCategory.map((c) => [c.category, c.total]));
   const comparisonRows = summary.byCategory
@@ -284,8 +283,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         kpis={kpis}
         donutSegments={donutSegments}
         budgetRing={budgetRing}
-        uobRing={uobRing}
-        hsbcRing={hsbcRing}
+        cardRings={cardRings}
         comparisonRows={comparisonRows}
         comparisonCurrentLabel={calendarMonthAbbr(calendarMonth)}
         comparisonPreviousLabel={calendarMonthAbbr(previousCalendarMonth)}
@@ -340,38 +338,41 @@ function formatShortDate(txnDate: string): string {
   return new Date(`${txnDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short" });
 }
 
-function numOrNull(value: unknown): number | null {
-  return typeof value === "number" ? value : null;
-}
+/** One ring per card, generic — reads only fields the contract itself
+ * names (cap.remaining/amount, a gate's actual/required), never a
+ * method_id or a duck-typed field guess (the old version of this file had
+ * a dedicated buildUobRing/buildHsbcRing pair keyed on method_id, exactly
+ * the special-casing WP4 removes). Prefers the card's own cap (whichever
+ * basis it uses) as the ring's progress denominator, since that is the
+ * single most legible "how close to the ceiling" figure a card can offer;
+ * falls back to the first gate's own progress when there is no cap; shows
+ * nothing for a card with neither (nothing ring-shaped to say). */
+function buildCardRing(displayName: string, status: CardPeriodStatus): CommandCenterRing | null {
+  if (status.active === false || status.error || status.has_rules === false) return null;
+  const currency = status.currency ?? "SGD";
 
-/** HSBC's bonus_spend/cap_amount are the exact same fields
- * summarizeCardStatus() already reads to build its headline text — this
- * ring visualizes the identical, already-displayed figures, not new math. */
-function buildHsbcRing(status: CardPeriodStatus | undefined): CommandCenterRing | null {
-  if (!status) return null;
-  const spend = numOrNull(status.bonus_spend);
-  const cap = numOrNull(status.cap_amount);
-  if (spend === null || cap === null || cap <= 0) return null;
-  return { label: "HSBC online cap", percent: (spend / cap) * 100, detail: `${formatMoney(spend)} of ${formatMoney(cap)}` };
-}
-
-/** UOB has no smooth percent in the raw status (gate_cleared is boolean) —
- * spend / (spend + spend_needed_for_gate) is the same two numbers
- * summarizeCardStatus() already displays as text, just visualized. */
-function buildUobRing(status: CardPeriodStatus | undefined): CommandCenterRing | null {
-  if (!status) return null;
-  if (status.gate_cleared === true) {
-    const spend = numOrNull(status.spend);
-    return { label: "UOB gate", percent: 100, detail: spend !== null ? `Cleared · ${formatMoney(spend)} this period` : "Gate cleared" };
+  const cap = status.cap;
+  if (cap && cap.amount > 0) {
+    const numerator = cap.basis === "reward" ? status.reward_accrued ?? 0 : cap.remaining !== null ? cap.amount - cap.remaining : 0;
+    return {
+      label: `${displayName} ${cap.basis} cap`,
+      percent: (numerator / cap.amount) * 100,
+      detail: `${formatMoney(numerator, currency)} of ${formatMoney(cap.amount, currency)}`,
+    };
   }
-  const spend = numOrNull(status.spend) ?? 0;
-  const needed = numOrNull(status.spend_needed_for_gate);
-  if (needed === null || spend + needed <= 0) return null;
-  return {
-    label: "UOB gate progress",
-    percent: (spend / (spend + needed)) * 100,
-    detail: `${formatMoney(spend)} so far · ${formatMoney(needed)} to clear the gate`,
-  };
+
+  const gate = (status.gates ?? [])[0];
+  if (gate && gate.required > 0) {
+    return {
+      label: `${displayName} gate`,
+      percent: gate.cleared ? 100 : (gate.actual / gate.required) * 100,
+      detail: gate.cleared
+        ? `Cleared · ${gate.kind === "txn_count" ? `${gate.actual} transactions` : formatMoney(gate.actual, currency)}`
+        : `${formatMoney(gate.actual, currency)} of ${formatMoney(gate.required, currency)} needed`,
+    };
+  }
+
+  return null;
 }
 
 function buildCategoryBarRows(

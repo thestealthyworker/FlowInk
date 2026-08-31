@@ -41,8 +41,10 @@ export interface CommandCenterProps {
   kpis: CommandCenterKpi[];
   donutSegments: CcDonutSegment[];
   budgetRing: CommandCenterRing | null;
-  uobRing: CommandCenterRing | null;
-  hsbcRing: CommandCenterRing | null;
+  // Was two hardcoded named slots (uobRing/hsbcRing) — generalised (WP4)
+  // to however many cards have something ring-worthy to show, computed
+  // generically off the contract rather than two method_id-pinned props.
+  cardRings: CommandCenterRing[];
   comparisonRows: CcComparisonRow[];
   comparisonCurrentLabel: string;
   comparisonPreviousLabel: string;
@@ -83,8 +85,9 @@ export function CommandCenter(props: CommandCenterProps) {
           {props.budgetRing && (
             <RingCard label="Budget used" percent={props.budgetRing.percent} detail={props.budgetRing.detail} />
           )}
-          {props.uobRing && <RingCard label={props.uobRing.label} percent={props.uobRing.percent} detail={props.uobRing.detail} />}
-          {props.hsbcRing && <RingCard label={props.hsbcRing.label} percent={props.hsbcRing.percent} detail={props.hsbcRing.detail} />}
+          {props.cardRings.map((ring) => (
+            <RingCard key={ring.label} label={ring.label} percent={ring.percent} detail={ring.detail} />
+          ))}
         </div>
 
         <CcComparisonBars

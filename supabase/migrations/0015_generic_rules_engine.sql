@@ -980,10 +980,16 @@ begin
     -- spend genuinely does earn at the base rate that track already
     -- reports, so crediting it there is the accurate description of
     -- where the reward came from, and it restores the invariant a
-    -- client would reasonably assume already held —
-    -- sum(reward_tracks[].accrued) == reward_accrued, with no exceptions
-    -- to special-case). `overflow_spend` is carried onto the same track
-    -- so it stays self-explanatory (why accrued > matched_spend * rate).
+    -- client would reasonably assume already held for category_rate
+    -- tracks — sum(reward_tracks[].accrued) == reward_accrued across
+    -- every category_rate row. That invariant still has exactly one
+    -- documented exception, unrelated to this fix: the tier track's
+    -- `accrued` (its fixed payout) is deliberately EXCLUDED from
+    -- reward_accrued — see the tier-track block above — so a client
+    -- summing reward_tracks[].accrued to reproduce reward_accrued must
+    -- skip any `kind: 'tier'` row. `overflow_spend` is carried onto the
+    -- same track so it stays self-explanatory (why accrued >
+    -- matched_spend * rate).
     if v_spend_cap_overflow > 0 then
       v_overflow_reward := round(v_spend_cap_overflow * coalesce(v_base_rate, 0), 2);
       v_reward_accrued := v_reward_accrued + v_overflow_reward;

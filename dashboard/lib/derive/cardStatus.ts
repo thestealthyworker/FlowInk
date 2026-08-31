@@ -13,15 +13,13 @@ export interface CardSummary {
 
 // Shared by CardStatusStrip (the full per-card list) and CardWatchLine (the
 // single most-urgent card surfaced near the top of the home view) — one
-// parser for card_period_status()'s jsonb shape, which differs per card
-// (method_rules-driven). Moved out of the strip component so both callers
-// read the same tone/headline logic rather than drifting apart.
+// summariser for card_period_status()'s contract (WP4: repointed to the
+// generic evaluator, 0017_repoint_card_period_status.sql), read generically
+// off `gates[]` / `cap` / `at_risk` rather than shape-sniffing which bank
+// this is (the old version of this file branched on `bonus_spend` /
+// `gate_cleared` field presence — exactly the guessing WP4 removes).
 export function summarizeCardStatus(status: CardPeriodStatus): CardSummary {
   if (status.active === false) {
-    // The DB's `note` field is a developer-facing implementation comment
-    // (references a migration section, a column name) — never surfaced
-    // verbatim; the plan's own language for this state is a single short
-    // line (§3 View 4: "not yet issued").
     return { headline: "This card has not been issued yet.", toneWord: "Not issued", tone: "ghost", daysLeft: null, atRisk: false };
   }
 
@@ -29,43 +27,42 @@ export function summarizeCardStatus(status: CardPeriodStatus): CardSummary {
     return { headline: String(status.error), toneWord: "Unavailable", tone: "neutral", daysLeft: null, atRisk: false };
   }
 
-  const daysLeft = typeof status.days_left === "number" ? status.days_left : null;
-  const atRisk = status.at_risk === true;
-  const daysSuffix = daysLeft !== null ? ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "";
-
-  // HSBC shape: bonus_spend against a spend-unit cap.
-  if (typeof status.bonus_spend === "number" && typeof status.cap_amount === "number") {
-    const headline = `${formatMoney(status.bonus_spend)} / ${formatMoney(status.cap_amount)} bonus cap${daysSuffix}`;
-    const capExhausted = status.cap_exhausted === true;
+  if (status.has_rules === false) {
+    const spend = typeof status.spend?.total === "number" ? status.spend.total : null;
     return {
-      headline,
-      toneWord: capExhausted ? "Cap reached" : atRisk ? "Unused headroom" : "On track",
-      tone: capExhausted ? "good" : atRisk ? "warning" : "neutral",
-      daysLeft,
-      atRisk,
+      headline: spend !== null ? `${formatMoney(spend, status.currency)} this period` : "No reward rules configured",
+      toneWord: "Budget only",
+      tone: "neutral",
+      daysLeft: null,
+      atRisk: false,
     };
   }
 
-  // UOB shape: an all-or-nothing minimum-spend gate.
-  if (typeof status.gate_cleared === "boolean") {
-    if (status.gate_cleared) {
-      const spend = typeof status.spend === "number" ? status.spend : 0;
-      return { headline: `Gate cleared · ${formatMoney(spend)} this period${daysSuffix}`, toneWord: "Cleared", tone: "good", daysLeft, atRisk: false };
-    }
-    const needed = typeof status.spend_needed_for_gate === "number" ? status.spend_needed_for_gate : null;
-    const headline = needed !== null ? `${formatMoney(needed)} to clear gate${daysSuffix}` : `Gate not yet cleared${daysSuffix}`;
-    return { headline, toneWord: atRisk ? "At risk" : "In progress", tone: atRisk ? "critical" : "warning", daysLeft, atRisk };
-  }
+  const currency = status.currency ?? "SGD";
+  const daysLeft = typeof status.period?.days_left === "number" ? status.period.days_left : null;
+  const atRisk = status.at_risk?.value === true;
+  const daysSuffix = daysLeft !== null ? ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "";
+  const spend = typeof status.spend?.total === "number" ? status.spend.total : 0;
+  const gates = status.gates ?? [];
+  const anyGateFailed = gates.some((g) => !g.cleared);
+  const allGatesCleared = gates.length > 0 && gates.every((g) => g.cleared);
+  const cap = status.cap ?? null;
 
-  // Generic fallback for any other shape.
-  const spend = typeof status.spend === "number" ? formatMoney(status.spend) : null;
-  return {
-    headline: `${spend ?? "—"} this period${daysSuffix}`,
-    toneWord: atRisk ? "At risk" : "On track",
-    tone: atRisk ? "warning" : "neutral",
-    daysLeft,
-    atRisk,
-  };
+  const headline = `${formatMoney(spend, currency)} this period${daysSuffix}`;
+
+  if (cap?.exhausted) {
+    return { headline, toneWord: "Cap reached", tone: "good", daysLeft, atRisk: false };
+  }
+  if (anyGateFailed && atRisk) {
+    return { headline, toneWord: "At risk", tone: "critical", daysLeft, atRisk };
+  }
+  if (atRisk) {
+    return { headline, toneWord: "Unused headroom", tone: "warning", daysLeft, atRisk };
+  }
+  if (allGatesCleared) {
+    return { headline, toneWord: "Cleared", tone: "good", daysLeft, atRisk: false };
+  }
+  return { headline, toneWord: "On track", tone: "neutral", daysLeft, atRisk: false };
 }
 
 export interface CardWatch {
@@ -78,11 +75,11 @@ export interface CardWatch {
 // info on my credit card metrics"). The plan (§1, §2) is explicit that
 // budgets/spend lead and cards are secondary — a full gauge grid belongs
 // to Phase D4's dedicated /cards view, not here. What earns a place on
-// this page is the ONE fact that would change a decision made today:
-// which card is closest to a deadline or threshold. Priority: an
-// actively at-risk card first (tie-broken by soonest deadline), else
-// simply the soonest-ending active period. Cards with no numeric
-// days_left (not yet issued, errored) never win the pick.
+// this page is the ONE fact that would change a decision made today —
+// which card is closest to a deadline or threshold. Priority: an actively
+// at-risk card first (tie-broken by soonest deadline), else simply the
+// soonest-ending active period. Cards with no numeric days_left (not yet
+// issued, errored, no rules) never win the pick.
 export function pickCardToWatch(cards: CardDashboardStatusRow[]): CardWatch | null {
   const candidates = cards
     .map((c) => ({ methodId: c.method_id, displayName: c.display_name, summary: summarizeCardStatus(c.status) }))
