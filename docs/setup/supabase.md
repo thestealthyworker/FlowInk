@@ -106,11 +106,12 @@ extensions, and the current recommended way to wire a `pg_cron` schedule
 to invoke an Edge Function with a bearer token held in Supabase Vault,
 both change as Supabase's own product surface evolves — this project's
 own source (`supabase/functions/_shared/cron_auth.ts`,
-`docs/cardledger-build-spec.md` §12) explicitly says to confirm the
-current pattern against live Supabase docs before wiring the cron
-schedule, and calls out that older approaches using `pgjwt` or `pgsodium`
-are deprecated. Don't copy a pattern from an old tutorial; check Supabase's
-current docs for "Cron" / "scheduling Edge Functions" at setup time.
+[`docs/architecture.md`](../architecture.md) §7) explicitly says to
+confirm the current pattern against live Supabase docs before wiring the
+cron schedule, and calls out that older approaches using `pgjwt` or
+`pgsodium` are deprecated. Don't copy a pattern from an old tutorial;
+check Supabase's current docs for "Cron" / "scheduling Edge Functions" at
+setup time.
 
 ## 5. Apply the database schema
 
@@ -158,8 +159,8 @@ order by version desc limit 5;
 ```
 
 The most recent version listed should match the highest-numbered
-migration file in your checkout (`0016` as of this writing). If it
-doesn't — if the CLI reports success but this query shows an older
+migration file in your checkout (run `ls supabase/migrations/ | tail -1`
+if you want to check without opening a file browser). If it doesn't — if the CLI reports success but this query shows an older
 version, or if `db push` printed an error you scrolled past — stop and
 diagnose before doing anything else. Re-running `db push` against a
 partially-applied migration is often fine (Postgres DDL in a single
@@ -270,6 +271,34 @@ Before considering any schema change done, run Supabase's built-in
 security linter (**Database → Security Advisor** or **Advisors** in the
 dashboard — naming varies by console version) and confirm it reports
 clean.
+
+**A second, less obvious trap if you write your own trigger:** this
+project's default posture is to never run a trigger or function
+`SECURITY DEFINER` — it runs as the calling role instead, subject to the
+same RLS the caller would face querying directly. That default has a
+sharp edge: a trigger that needs to write across a table boundary RLS
+restricts will silently affect **zero rows**, with no error, if it stays
+`SECURITY INVOKER`. This happened on this project's own reference
+deployment — a trigger updated zero of the rows it was meant to for a
+full day before anyone noticed, because nothing had re-checked live data
+against the claim that it worked. See
+[`docs/architecture.md`](../architecture.md)'s security-model section for
+the full story and the fix pattern (a narrowly-scoped, explicitly
+documented `SECURITY DEFINER` exception) before you write your own
+trigger that reaches across tables.
+
+## 9. Basic account hygiene, worth doing once and forgetting about
+
+Two things that cost a few minutes and materially reduce how bad a worst
+case looks, neither enforced by anything in this repo:
+
+- **Turn on MFA on your Supabase account.** It's the account that holds
+  your service-role key (which bypasses RLS entirely) and your project's
+  full data — worth the extra step beyond a password alone.
+- **Set a spend cap on your Supabase project's billing.** Available under
+  your organization's billing settings. Costs nothing if you never
+  approach it, and bounds the damage of a runaway query or an
+  unexpectedly high usage month.
 
 ## What's next
 

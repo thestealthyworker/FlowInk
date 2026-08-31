@@ -76,6 +76,18 @@ rather than the watermark advancing normally after each successful
 insert. Check `ingest_state` (the watermark table) before assuming the
 API itself got more expensive.
 
+**A related but opposite failure worth knowing about, if you ever fix a
+bug in the ingest pipeline:** a message can also be permanently rejected
+and have the watermark advance *past* it (deliberately — so one
+unparseable message can't burn an API call forever). If the rejection
+happened because of a real bug rather than a genuinely unparseable
+message, fixing the bug does **not** retroactively reprocess anything —
+the watermark has already moved on. This has happened on this project's
+own reference deployment. See
+[`docs/architecture.md`](../architecture.md)'s ingestion-design section
+for the full trap and how to recover from it (check `parse_failures` for
+the affected window, then consider a deliberate watermark rewind).
+
 ## What's next
 
 With both Gmail and Anthropic configured, live alert ingestion can
