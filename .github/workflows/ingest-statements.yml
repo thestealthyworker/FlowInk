@@ -48,6 +48,14 @@ jobs:
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STATEMENT_PDF_PASSWORD: ${{ secrets.STATEMENT_PDF_PASSWORD }}
+          # scripts/ingest_statements.py:454 and scripts/lib/senders.py:59
+          # both read these directly from the environment (os.environ.get),
+          # falling back to hardcoded defaults when unset. Without forwarding
+          # them here, setting either GitHub secret had silently no effect —
+          # the job always ran on the built-in defaults regardless of what
+          # was configured.
+          STATEMENT_GMAIL_QUERY: ${{ secrets.STATEMENT_GMAIL_QUERY }}
+          STATEMENT_SENDER_DOMAINS: ${{ secrets.STATEMENT_SENDER_DOMAINS }}
         # Never echo secrets or decrypted statement lines in this workflow —
         # Actions logs persist and are readable by anyone with repo access (§11).
         run: python scripts/ingest_statements.py

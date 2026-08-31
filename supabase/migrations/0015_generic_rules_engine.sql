@@ -53,6 +53,56 @@
 -- comments directly above each `alter table ... add column` below for the
 -- full explanation at its point of use.
 --
+-- A SECOND, MORE CONSEQUENTIAL DEPARTURE — NOT BIT-FOR-BIT, DELIBERATELY,
+-- ON THE ANCHOR-ALIGNED QUARTER PATH ONLY
+-- ------------------------------------------------------------------
+-- This migration's fidelity claim is qualified, not blanket. There are
+-- two branches inside evaluate_period_group()'s window resolution
+-- (mirroring uob_quarter_status's own v_anchor is null / is not null
+-- split, 0007 lines 594-603):
+--
+--   - anchor NULL (the trailing-window fallback, grouping =
+--     'anchor_unknown_trailing_window'): bit-for-bit identical to 0007 —
+--     this is the only path any production data has ever exercised,
+--     because quarter_anchor_date has been NULL for uob_one in every
+--     environment to date.
+--   - anchor NOT NULL (grouping = 'anchor_aligned'): deliberately NOT
+--     bit-for-bit. uob_quarter_status (0007 line 598) advances the
+--     window start by ONE MONTH per elapsed group —
+--     `date_trunc('month', v_anchor) + floor(v_months_diff / 3.0)::int *
+--     interval '1 month'` — instead of by the window's full width. That
+--     is a stride bug: it only produces the right answer for the first
+--     quarter after the anchor, then walks the window start forward at a
+--     third of the correct rate every quarter after that, so members
+--     silently drift out of alignment with the anchor quarter boundaries
+--     the whole feature exists to respect. This evaluator instead
+--     advances by the full window width (`... * v_window * interval '1
+--     month'`) — the corrected, actually-quarterly arithmetic.
+--
+-- Concrete, verified example (aggregation_anchor_date = '2026-02-01',
+-- run directly against both functions before this fix): for target
+-- uob_one:2026-05, 0007 groups months [2026-03, 2026-04, 2026-05] while
+-- this evaluator groups [2026-05, 2026-06, 2026-07]; for target
+-- uob_one:2026-08, 0007 groups [2026-04, 2026-05, 2026-06] while this
+-- evaluator groups [2026-08, 2026-09, 2026-10] — and for that second
+-- target the divergence flips the downstream `forfeited` verdict itself
+-- (0007: forfeited = true; this evaluator: forfeited = false), i.e. a
+-- real payout being wrongly written off versus correctly recognised,
+-- depending on which engine answered. Reproduce with
+-- `diff_evaluator_output('uob_one', 'uob_one:2026-08')` after setting
+-- aggregation_anchor_date — see WP1's differential-run artifacts for the
+-- full anchor-set output.
+--
+-- This has been dormant in production because quarter_anchor_date is
+-- NULL for every seeded card, so evaluate_period_group() has only ever
+-- run the (genuinely bit-for-bit) trailing-window branch. The moment
+-- anything sets that column, the two engines will answer differently
+-- for real, and correctly so on the NEW side — do NOT "fix" this
+-- evaluator to reproduce 0007's stride bug. See the comment directly on
+-- v_window_start's anchor-aligned assignment in evaluate_period_group()
+-- below, and the warning on payment_methods.aggregation_anchor_date
+-- (and quarter_anchor_date), for the same note at point of use.
+--
 -- COLUMNS BEYOND THE DESIGN DOC'S §2 LIST — flagged prominently,
 -- not silently added (originally three; now two this migration itself
 -- adds, plus payment_methods.currency which 0014 got to first — see
@@ -311,9 +361,22 @@ comment on column payment_methods.aggregation_anchor_date is
    (grouping = ''anchor_unknown_trailing_window'') exactly as
    uob_quarter_status always did (0007 lines 532-542) — this new,
    additive column changes nothing about that behaviour (see the header
-   note above this table''s section on why it is additive, not a rename),
-   see evaluate_period_group() below for the bit-for-bit preserved
-   arithmetic.';
+   note above this table''s section on why it is additive, not a rename).
+   WARNING — setting this column to NOT NULL changes quarterly window
+   computation versus retired uob_quarter_status (0007) behaviour: once
+   an anchor is set, evaluate_period_group() takes the
+   ''anchor_aligned'' branch, which DELIBERATELY does not reproduce 0007
+   bit-for-bit — 0007 (0007 line 598) has a stride bug that advances the
+   window start by one month per elapsed group instead of by the full
+   window width, so it only computes correct quarter boundaries for the
+   first quarter after the anchor and drifts every quarter thereafter;
+   this evaluator computes the corrected, actually-quarterly windows
+   instead, which can flip the `forfeited` verdict for a period 0007
+   would have grouped differently. See the "SECOND, MORE CONSEQUENTIAL
+   DEPARTURE" section in this migration''s header for the full example,
+   and evaluate_period_group() below for the bit-for-bit-preserved
+   trailing-window arithmetic (the only path exercised while this column
+   stays NULL, as it does for every card today).';
 
 -- NOTE: currency is deliberately NOT added here. design/rules-engine.md
 -- §3.1 names it as a field this migration's output contract needs, and
@@ -492,6 +555,8 @@ declare
   v_row_reward numeric;
   v_applied numeric;
   v_spend_cap_overflow numeric := 0;
+  v_overflow_reward numeric;
+  v_base_track_idx int := null;
   v_tier_thresholds jsonb := '[]'::jsonb;
   v_tier_hit jsonb := null;
   v_gap_to_next numeric := null;
@@ -626,7 +691,23 @@ begin
     v_tier_thresholds := v_tier_thresholds || jsonb_build_array(jsonb_build_object(
       'value', r.threshold, 'reached', v_t_reached, 'is_current_tier', v_t_is_current,
       'payout', r.payout,
-      'gap', case when not v_t_reached then round(greatest(0, r.threshold - v_spend), 2) else null end
+      'gap', case when not v_t_reached then round(greatest(0, r.threshold - v_spend), 2) else null end,
+      -- QA finding (contract defect): without this, a tier that is
+      -- unreached purely on transaction count (spend already at/above
+      -- threshold, so `gap` above is 0.00) was indistinguishable from a
+      -- reached tier except for `reached: false`, with nothing in the
+      -- row explaining why — e.g. UOB with 9 txns / $2,250 spend shows
+      -- every tier as gap: 0.00, reached: false. A client had to
+      -- cross-reference the top-level gates[] and assume it applies
+      -- uniformly to every tier, which this migration's own header
+      -- (the gate_scope = 'tier_only' departure, lines 422-451) says is
+      -- NOT the real mechanism — each tier row has its own independent
+      -- txn_min. Exposing it here lets a client compute its own txn
+      -- shortfall (txn_min - spend.txn_count) directly from data this
+      -- evaluator already returns, the same way `gap` already lets it
+      -- compute spend shortfall — not a recomputed reward, so build
+      -- spec §9 is not in tension with this.
+      'txn_min', coalesce(r.txn_min, 0)
     ));
   end loop;
 
@@ -841,6 +922,12 @@ begin
           'matched_spend', round(v_cat_spend, 2), 'rate', r.rate, 'accrued', round(v_applied, 2),
           'cap', null
         ));
+        -- Remember this track's index: spend-cap overflow accumulated
+        -- across every capped bonus row above (known only once the loop
+        -- below finishes) gets folded into ITS accrued figure, not left
+        -- to inflate reward_accrued alone with no track to show for it —
+        -- see the overflow-routing block after this loop.
+        v_base_track_idx := jsonb_array_length(v_reward_tracks) - 1;
       else
         -- Reward-ceiling row (uob_one/citi_cashback-style, or genuinely
         -- uncapped when v_cap_row.cap_basis is null): clamp the computed
@@ -876,8 +963,41 @@ begin
     -- `v_overflow * v_base_rate` term of hsbc_month_status line 831,
     -- generalised across however many spend-capped rows this card has
     -- (currently exactly one).
+    --
+    -- QA finding (contract defect, not a behaviour bug — the DOLLAR
+    -- figure below was always right): folding the overflow reward only
+    -- into the top-level v_reward_accrued and nowhere else left it
+    -- invisible in reward_tracks[] — e.g. HSBC dining spend $1,050
+    -- against a $1,000 spend-basis cap: top-level reward_accrued =
+    -- 4020.00, but summing reward_tracks[].accrued gave 4000.00, a
+    -- $20 gap present in NO track. `overflow_spend` existed on the
+    -- capped bonus row, but its reward VALUE required a client to also
+    -- find the sibling `categories: null` track, read its `rate`, and
+    -- multiply — recomputing a number this evaluator already computed,
+    -- which build spec §9 forbids clients from having to do. Fixed by
+    -- folding the overflow reward into the base-rate track's own
+    -- `accrued` (chosen over adding a new top-level field: the overflow
+    -- spend genuinely does earn at the base rate that track already
+    -- reports, so crediting it there is the accurate description of
+    -- where the reward came from, and it restores the invariant a
+    -- client would reasonably assume already held —
+    -- sum(reward_tracks[].accrued) == reward_accrued, with no exceptions
+    -- to special-case). `overflow_spend` is carried onto the same track
+    -- so it stays self-explanatory (why accrued > matched_spend * rate).
     if v_spend_cap_overflow > 0 then
-      v_reward_accrued := v_reward_accrued + v_spend_cap_overflow * coalesce(v_base_rate, 0);
+      v_overflow_reward := round(v_spend_cap_overflow * coalesce(v_base_rate, 0), 2);
+      v_reward_accrued := v_reward_accrued + v_overflow_reward;
+      if v_base_track_idx is not null then
+        v_reward_tracks := jsonb_set(
+          jsonb_set(
+            v_reward_tracks,
+            array[v_base_track_idx::text, 'accrued'],
+            to_jsonb(round(coalesce((v_reward_tracks -> v_base_track_idx ->> 'accrued')::numeric, 0) + v_overflow_reward, 2))
+          ),
+          array[v_base_track_idx::text, 'overflow_spend'],
+          to_jsonb(round(v_spend_cap_overflow, 2))
+        );
+      end if;
     end if;
   end if;
 
@@ -981,6 +1101,21 @@ begin
     ) else null end,
     'crediting', v_crediting,
     'group', null, -- populated by card_period_status-equivalent callers via evaluate_period_group(); see that function
+    -- QA finding (contract defect): `group` above is unconditionally
+    -- null, with nothing in this payload telling a client that
+    -- evaluate_period_group() is meaningful for this method_id at all —
+    -- the only way to know uob_one is quarterly was out-of-band
+    -- knowledge baked into the caller, exactly the per-issuer
+    -- special-casing this generic contract exists to remove. `has_group`
+    -- is the boolean a client branches on; `aggregation_window` is
+    -- surfaced alongside it (null when has_group is false) since a
+    -- caller that already knows to call evaluate_period_group() needs
+    -- the window size to know how many member periods to expect back,
+    -- and this evaluator already has the value in hand from the same
+    -- payment_methods row `group` above's own note points at — no
+    -- second query.
+    'has_group', v_method.aggregation_window is not null,
+    'aggregation_window', v_method.aggregation_window,
     'at_risk', jsonb_build_object('value', v_at_risk, 'reasons', to_jsonb(v_reasons)),
     'estimate_caveats', to_jsonb(v_estimate_caveats),
     'active', true
@@ -996,7 +1131,21 @@ comment on function evaluate_period(text, text) is
    own prose. NOT yet called by card_period_status() — that switch is
    gated on diff_evaluator_output() below being reviewed clean across a
    real range of periods. uob_month_status/hsbc_month_status/
-   citi_month_status remain the live path until then.';
+   citi_month_status remain the live path until then.
+   QA-driven additive fixes on top of the original shape, none changing
+   any EXISTING field''s meaning except where noted: (1) `has_group` and
+   `aggregation_window` are new top-level fields — the only way to know
+   evaluate_period_group() applies to a method_id used to be out-of-band
+   knowledge that uob_one is quarterly; (2) each `reward_tracks[]` tier
+   row gained `txn_min` so an unreached tier is self-explanatory even
+   when spend already clears the threshold (`gap: 0.00`) and only the
+   independent txn_min is unmet; (3) the base-rate (`categories: null`)
+   category_rate track''s `accrued` — and this IS a meaning change, flagged
+   here loudly, nothing consumes this contract yet — now includes any
+   spend-cap overflow reward routed to it (with a new `overflow_spend`
+   field alongside explaining why), instead of that reward existing only
+   in the top-level reward_accrued total with no track summing to it. See
+   the inline comments at each site for the concrete QA-found cases.';
 
 -- ============ CROSS-PERIOD AGGREGATION ============
 --
@@ -1004,11 +1153,17 @@ comment on function evaluate_period(text, text) is
 -- version driven by payment_methods.aggregation_window /
 -- aggregation_anchor_date instead of a hardcoded 3 and
 -- array[2000,1000,600]. Keeps uob_quarter_status's exact algorithm (0007
--- lines 543-728): resolve the window via the anchor or the trailing-
--- window fallback, call evaluate_period() once per member period (never
--- itself recursively — no unbounded recursion risk), and determine
--- still_achievable_tier / confirmed_tier / forfeited from each member's
--- own gate clearance, never a summed total across members.
+-- lines 543-728) for the SHAPE of the computation — resolve the window
+-- via the anchor or the trailing-window fallback, call evaluate_period()
+-- once per member period (never itself recursively — no unbounded
+-- recursion risk), and determine still_achievable_tier / confirmed_tier
+-- / forfeited from each member's own gate clearance, never a summed
+-- total across members — but NOT for the anchor-aligned window
+-- arithmetic itself, which this function deliberately corrects rather
+-- than reproduces. See the "SECOND, MORE CONSEQUENTIAL DEPARTURE"
+-- section in this migration's header, and the comment on
+-- v_window_start's anchor-aligned branch below, for the concrete
+-- divergence and why it is intentional.
 create or replace function evaluate_period_group(p_method_id text, p_period_key text default null)
 returns jsonb
 language plpgsql
@@ -1068,6 +1223,24 @@ begin
   );
 
   if v_anchor is not null then
+    -- NOT bit-for-bit uob_quarter_status (0007 line 598) — deliberately.
+    -- 0007's own arithmetic is `date_trunc('month', v_anchor) +
+    -- floor(v_months_diff / 3.0)::int * interval '1 month'`: it advances
+    -- the window start by ONE MONTH per elapsed group instead of by the
+    -- window's full width, a stride bug that only lands on the right
+    -- quarter boundary for the first quarter after the anchor and then
+    -- drifts every quarter after that. This line fixes the stride to
+    -- `* v_window` so the window start actually advances by whole
+    -- windows. Verified divergent (and this side verified correct)
+    -- against 0007's function directly: with aggregation_anchor_date =
+    -- '2026-02-01', target uob_one:2026-05 groups [2026-03, 2026-04,
+    -- 2026-05] under 0007 vs [2026-05, 2026-06, 2026-07] here; target
+    -- uob_one:2026-08 groups [2026-04, 2026-05, 2026-06] under 0007 vs
+    -- [2026-08, 2026-09, 2026-10] here, and that second case flips the
+    -- downstream `forfeited` verdict between the two engines. See the
+    -- "SECOND, MORE CONSEQUENTIAL DEPARTURE" section in this migration's
+    -- header for the full writeup — do not "fix" this line to match
+    -- 0007; 0007 is the one that is wrong.
     v_months_diff := (extract(year from v_target)::int - extract(year from v_anchor)::int) * 12
                     + (extract(month from v_target)::int - extract(month from v_anchor)::int);
     v_window_start := (date_trunc('month', v_anchor)
@@ -1186,10 +1359,21 @@ $$;
 
 comment on function evaluate_period_group(text, text) is
   'Generic replacement for uob_quarter_status. Called only when
-   payment_methods.aggregation_window is not null. Bit-for-bit preserves
-   the anchor-unknown trailing-window fallback (grouping =
+   payment_methods.aggregation_window is not null. Fidelity to 0007 is
+   qualified, not blanket: bit-for-bit preserves the anchor-unknown
+   trailing-window fallback (grouping =
    ''anchor_unknown_trailing_window'') for uob_one, the only card this has
-   ever run against — see the inline comment on v_window_start above.';
+   ever run against — see the inline comment on v_window_start above.
+   The anchor-aligned branch (grouping = ''anchor_aligned'', taken only
+   when aggregation_anchor_date is set — true for no card today) is
+   DELIBERATELY NOT bit-for-bit: it corrects a window-stride bug in 0007
+   (0007 line 598 advances the window start by one month per elapsed
+   group instead of by the full window width) rather than reproducing
+   it, which can change which periods group together and can flip the
+   `forfeited` verdict versus 0007 for the same period_key. See the
+   "SECOND, MORE CONSEQUENTIAL DEPARTURE" section in this migration''s
+   header for the concrete example, and the inline comment on
+   v_window_start''s anchor-aligned assignment above for the fix itself.';
 
 -- ============ DIFFERENTIAL-TESTING HARNESS (WP1's own acceptance gate,
 -- reused by WP7's validator) ============
@@ -1322,6 +1506,31 @@ begin
     'match', coalesce((v_old ->> 'at_risk')::boolean, false) = coalesce((v_new -> 'at_risk' ->> 'value')::boolean, false)
   ));
 
+  -- gates[] / gate_cleared: old exposes one aggregate boolean (v_gate_ok,
+  -- ANDed across however many gate rows the card has — 0007 lines 406-414
+  -- / 955-960); new exposes the per-row detail in gates[] plus nothing
+  -- pre-aggregated, so aggregate it here the same way old did (bool_and,
+  -- vacuously true when there are no gate rows, matching v_gate_ok's
+  -- `:= true` initial value). Not every card has a gate row at all — HSBC
+  -- has none, hence no `gate_cleared` field in old's output — so this is
+  -- skipped, not defaulted, when old has nothing to compare against.
+  -- Previously this evaluator's gates[] output was exercised by every
+  -- fixture case QA tried without ever actually being asserted on by
+  -- this harness.
+  if v_old ? 'gate_cleared' then
+    declare
+      v_new_gates_cleared boolean;
+    begin
+      select bool_and(coalesce((g ->> 'cleared')::boolean, false)) into v_new_gates_cleared
+      from jsonb_array_elements(coalesce(v_new -> 'gates', '[]'::jsonb)) g;
+      v_new_gates_cleared := coalesce(v_new_gates_cleared, true);
+      v_checks := v_checks || jsonb_build_array(jsonb_build_object(
+        'field', 'gate_cleared', 'old', v_old -> 'gate_cleared', 'new', to_jsonb(v_new_gates_cleared),
+        'match', coalesce((v_old ->> 'gate_cleared')::boolean, true) = v_new_gates_cleared
+      ));
+    end;
+  end if;
+
   -- tier_hit / gap_to_next (only when a tier track exists — uob_one)
   if v_new -> 'reward_tracks' is not null and jsonb_path_exists(v_new -> 'reward_tracks', '$[*] ? (@.kind == "tier")') then
     declare
@@ -1367,6 +1576,30 @@ begin
 
   -- UOB's quarterly group
   if v_window is not null and v_old ? 'quarter' then
+    -- Group MEMBERSHIP — the actual list of member period_keys, in
+    -- order. This is the one check whose absence let the anchor-aligned
+    -- quarter-stride bug (see this migration's header) through
+    -- undetected: every other check below compares a downstream
+    -- computed verdict, which happens to agree between the two engines
+    -- far more often than the member list itself does once the windows
+    -- actually diverge (e.g. it still agreed for the anchor-unknown
+    -- trailing-window path this harness had only ever been run against
+    -- before an anchor was set). Comparing the raw member list catches
+    -- the divergence directly, at its source, rather than waiting for it
+    -- to (sometimes) surface downstream in forfeited/still_achievable.
+    declare
+      v_old_members jsonb;
+      v_new_members jsonb;
+    begin
+      select jsonb_agg(m ->> 'period_key' order by ord) into v_old_members
+      from jsonb_array_elements(v_old -> 'quarter' -> 'quarter_months') with ordinality as t(m, ord);
+      select jsonb_agg(m -> 'period' ->> 'key' order by ord) into v_new_members
+      from jsonb_array_elements(v_group -> 'members') with ordinality as t(m, ord);
+      v_checks := v_checks || jsonb_build_array(jsonb_build_object(
+        'field', 'group.members', 'old', v_old_members, 'new', v_new_members,
+        'match', v_old_members is not distinct from v_new_members
+      ));
+    end;
     v_checks := v_checks || jsonb_build_array(jsonb_build_object(
       'field', 'group.grouping', 'old', v_old -> 'quarter' -> 'grouping', 'new', v_group -> 'grouping',
       'match', (v_old -> 'quarter' ->> 'grouping') is not distinct from (v_group ->> 'grouping')
