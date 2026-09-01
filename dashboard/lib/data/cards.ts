@@ -11,8 +11,9 @@ import type { CardDashboardStatusRow } from "../supabase/types";
 // per-card functions — the row shape returned here changed accordingly
 // (lib/supabase/types.ts's CardPeriodStatus), but this file's own contract
 // (method_id, display_name, status) is unaffected. Deterministic SQL under
-// the hood, per §9: "the model may parse and classify; it must never
-// decide whether a threshold was met." Nothing here recomputes anything.
+// the hood, per docs/architecture.md §6: "the model may parse and
+// classify; it must never decide whether a threshold was met." Nothing
+// here recomputes anything.
 export async function getCardDashboardStatus(
   supabase: SupabaseClient
 ): Promise<CardDashboardStatusRow[]> {

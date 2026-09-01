@@ -477,10 +477,10 @@ update payment_methods
 -- evaluate_period() replaces uob_month_status / hsbc_month_status /
 -- citi_month_status with one function that reads method_rules as data
 -- instead of branching on method_id. Same five-ish-step order the old
--- functions and the build spec §9 already used: resolve bounds, sum
--- spend, resolve conditions, evaluate gates, evaluate tiers, evaluate
--- category rates (cap-aware), apply the crediting transform, build the
--- self-describing output (design §3.1).
+-- functions and the build spec (docs/architecture.md §6) already used:
+-- resolve bounds, sum spend, resolve conditions, evaluate gates,
+-- evaluate tiers, evaluate category rates (cap-aware), apply the
+-- crediting transform, build the self-describing output (design §3.1).
 --
 -- ============ A REAL DISCREPANCY BETWEEN THE DESIGN DOC AND THE CODE IT
 -- WAS MODELLED ON, PRESERVED HERE RATHER THAN SILENTLY "FIXED" ============
@@ -705,8 +705,8 @@ begin
       -- txn_min. Exposing it here lets a client compute its own txn
       -- shortfall (txn_min - spend.txn_count) directly from data this
       -- evaluator already returns, the same way `gap` already lets it
-      -- compute spend shortfall — not a recomputed reward, so build
-      -- spec §9 is not in tension with this.
+      -- compute spend shortfall — not a recomputed reward, so build spec
+      -- (docs/architecture.md §6) is not in tension with this.
       'txn_min', coalesce(r.txn_min, 0)
     ));
   end loop;
@@ -974,8 +974,9 @@ begin
     -- capped bonus row, but its reward VALUE required a client to also
     -- find the sibling `categories: null` track, read its `rate`, and
     -- multiply — recomputing a number this evaluator already computed,
-    -- which build spec §9 forbids clients from having to do. Fixed by
-    -- folding the overflow reward into the base-rate track's own
+    -- which build spec (docs/architecture.md §6) forbids clients from
+    -- having to do. Fixed by folding the overflow reward into the
+    -- base-rate track's own
     -- `accrued` (chosen over adding a new top-level field: the overflow
     -- spend genuinely does earn at the base rate that track already
     -- reports, so crediting it there is the accurate description of

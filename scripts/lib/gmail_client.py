@@ -1,7 +1,8 @@
 """Gmail readonly client for the GitHub Actions runtime. Same refresh-token
 flow as the Edge Function version (supabase/functions/_shared/gmail.ts),
 duplicated deliberately — GitHub Actions and Edge Functions are separate
-runtimes with separate secret stores (docs/cardledger-build-spec.md §12).
+runtimes with separate secret stores (docs/architecture.md §10,
+"Everything else").
 """
 from __future__ import annotations
 

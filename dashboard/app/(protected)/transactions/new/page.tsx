@@ -8,8 +8,9 @@ import { formatMoney } from "@/components/honest-data/MoneyFigure";
 import { GmailNotConfiguredNotice } from "@/components/honest-data/IntegrationNotice";
 import { getIntegrationStatus, isConfigured } from "@/lib/data/integration-status";
 
-// Manual entry for non-card spend (Phase D5 restyle; docs/cardledger-build-spec.md
-// §10 AMENDMENT, §14 "cash is invisible"). Always source='manual',
+// Manual entry for non-card spend (Phase D5 restyle; docs/architecture.md
+// §9, "Manual entry and the dashboard as an input surface", and §11's
+// "cash ... is invisible" limitation). Always source='manual',
 // method_id='manual'. This is the only write path for cash / bank
 // transfer / non-DBS GIRO — the one thing the ingest pipeline structurally
 // cannot see — so speed of entry matters more than anything else on this

@@ -10,7 +10,8 @@ import { formatMoney } from "@/components/honest-data/MoneyFigure";
 const TRAILING_MONTHS = 6;
 
 // Budget CRUD (Phase D2). `budgets` is empty in production and this page
-// is its only insertion path (docs/cardledger-build-spec.md §10 AMENDMENT).
+// is its only insertion path (docs/architecture.md §9, "Manual entry and
+// the dashboard as an input surface").
 // The amendment's specific ask beyond plain CRUD: a candidate cap is
 // compared against real trailing actuals in the SAME view as the input,
 // not a separate report — BudgetPlannerForm carries that.

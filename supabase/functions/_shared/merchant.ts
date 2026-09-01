@@ -1,5 +1,6 @@
-// Merchant normalisation and lookup. Per docs/cardledger-build-spec.md §4
-// parser trap 5: raw merchant strings carry line-wrap artefacts and
+// Merchant normalisation and lookup. Per docs/reference-example-sg.md's
+// "Alert email formats and parser traps" section, trap 5: raw merchant
+// strings carry line-wrap artefacts and
 // corporate-suffix noise ("N.N.HARBOURLIGHT BISTRO PTE. LT D.").
 // Normalise before matching: collapse whitespace, strip punctuation and
 // corporate suffixes, uppercase. Match on the normalised form.

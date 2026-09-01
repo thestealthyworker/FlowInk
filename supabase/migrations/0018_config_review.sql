@@ -1190,8 +1190,8 @@ begin
   -- 2099-01-01 "not yet issued" staging date (this demo card is live from
   -- day one), and status/proposed_by/reviewed_* set as if an operator had
   -- typed them — this is worked example data, not an AI proposal, so it
-  -- is born 'active' with no review step. See docs/cardledger-build-spec.md
-  -- §5 for the original T&C citations these numbers came from.
+  -- is born 'active' with no review step. See docs/reference-example-sg.md's
+  -- "Sources" section for the original T&C citations these numbers came from.
   insert into method_rules
     (method_id, rule_type, categories, threshold, rate, cap_amount, payout, txn_min, priority,
      valid_from, notes, cap_basis, reward_form, gate_scope, status, proposed_by, reviewed_at, reviewed_by)
@@ -1313,9 +1313,9 @@ comment on function load_example_data_singapore is
    write). Refuses to run if uob_one/hsbc_revo/citi_cashback already
    exist, so it can never silently clobber a real card the operator
    deployed under the same id. Data verified against official issuer T&Cs
-   as of August 2026 (docs/cardledger-build-spec.md §5) — same numbers
-   0002_seed.sql originally shipped, moved here so a fresh deployment
-   does not inherit them automatically.';
+   as of August 2026 (see docs/reference-example-sg.md''s "Sources"
+   section) — same numbers 0002_seed.sql originally shipped, moved here so
+   a fresh deployment does not inherit them automatically.';
 
 create or replace function clear_example_data()
 returns text

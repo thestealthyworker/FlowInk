@@ -1,12 +1,12 @@
-// Period-key resolution. Read docs/cardledger-build-spec.md §3 before
+// Period-key resolution. Read docs/architecture.md §3 before
 // touching this file — card periods are not calendar months, and are not
 // the same as each other. UOB One and Citi run on statement months
 // (anchored to the card's cycle_day, i.e. statement close day); HSBC
 // Revolution runs on calendar months.
 //
 // A transaction belongs to TWO periods, stored separately and never
-// collapsed (§4): `calendar_month` for budgeting, `period_key` for card
-// rules. This module only resolves the latter.
+// collapsed (same §3 above): `calendar_month` for budgeting, `period_key`
+// for card rules. This module only resolves the latter.
 //
 // Kept behaviourally identical to scripts/lib/period.py. period_test.ts
 // covers the day-29/30/31 cases; see the note on month arithmetic below.

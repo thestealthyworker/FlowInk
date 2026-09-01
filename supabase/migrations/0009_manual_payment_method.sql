@@ -1,6 +1,7 @@
 -- Phase 5 gap-fill, discovered while building the dashboard's manual-entry
--- form (docs/cardledger-build-spec.md §10 AMENDMENT, §14 "cash is
--- invisible"). transactions.method_id is `not null references
+-- form (docs/architecture.md §9, "Manual entry and the dashboard as an
+-- input surface", and §11's "cash ... is invisible" limitation).
+-- transactions.method_id is `not null references
 -- payment_methods(id)`, and every row 0002_seed.sql inserted is a real
 -- card or wallet with a real last4 — there is no payment_methods row a
 -- manual (cash / bank transfer / GIRO) entry can point at.

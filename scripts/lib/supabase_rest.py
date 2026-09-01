@@ -1,5 +1,5 @@
 """Thin PostgREST client. GitHub Actions is a separate runtime from Edge
-Functions (see docs/cardledger-build-spec.md §12) and has no direct
+Functions (see docs/architecture.md §10, "Everything else") and has no direct
 Postgres connection string configured — it talks to Supabase the same way
 the dashboard eventually will, over the REST API, but with the
 service-role key so it bypasses RLS.

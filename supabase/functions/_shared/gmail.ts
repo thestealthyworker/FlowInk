@@ -1,5 +1,6 @@
-// Gmail readonly client. Auth flow per docs/cardledger-build-spec.md §7:
-// refresh token lives in the Edge Function's own secret store
+// Gmail readonly client. Per docs/architecture.md §10 ("Everything else" —
+// each runtime reads only its own secret store): the refresh token lives
+// in the Edge Function's own secret store
 // (`supabase secrets set`, NOT Vault — Vault is for values Postgres needs).
 // Each invocation exchanges it for a 1-hour access token held in memory only.
 

@@ -1,10 +1,10 @@
--- FlowInk schema. See docs/cardledger-build-spec.md §4 for design notes.
+-- FlowInk schema. See docs/architecture.md §4 for design notes.
 --
 -- Card rules live in the database as data (method_rules), never in code.
 -- A rate change is an UPDATE, not a deploy.
 --
 -- RLS is enabled default-deny on every table at creation time, per
--- docs/cardledger-build-spec.md §11. No policies are added here: Edge
+-- docs/architecture.md §10. No policies are added here: Edge
 -- Functions and GitHub Actions write with the service_role key, which
 -- bypasses RLS by design. Phase 5 adds auth.uid()-scoped SELECT policies
 -- for the dashboard.

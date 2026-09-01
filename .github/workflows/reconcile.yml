@@ -1,6 +1,6 @@
 name: Reconcile
 
-# JOB-3 (docs/cardledger-build-spec.md §7). Runs immediately after
+# JOB-3 (docs/architecture.md §7). Runs immediately after
 # Ingest Statements via workflow_run, plus workflow_dispatch as a manual
 # fallback (e.g. re-running reconciliation without re-fetching statements).
 
@@ -40,9 +40,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Telegram was removed 2026-08-25 (docs/cardledger-build-spec.md §10
-          # AMENDMENT). healthchecks.io is now the only out-of-band alarm —
-          # see scripts/lib/healthchecks.py.
+          # Telegram was removed 2026-08-25 (see docs/architecture.md §2).
+          # healthchecks.io is now the only out-of-band alarm — see
+          # scripts/lib/healthchecks.py.
           HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
           # reconcile.py calls lib.senders.reconcilable_method_ids() with no
           # db client, so statement_sender_domains() never takes its

@@ -1,7 +1,7 @@
 """Python mirror of supabase/functions/_shared/healthchecks.ts.
 
-Telegram was removed on 2026-08-25 (docs/cardledger-build-spec.md §10
-AMENDMENT). healthchecks.io is now the only out-of-band alarm across BOTH
+Telegram was removed on 2026-08-25 (see docs/architecture.md §2).
+healthchecks.io is now the only out-of-band alarm across BOTH
 runtimes: Edge Functions (Deno, `_shared/healthchecks.ts`) and this GitHub
 Actions / `scripts/` runtime (Python). `scripts/` cannot import the Deno
 module, so this file duplicates its API on purpose rather than being a

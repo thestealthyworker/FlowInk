@@ -1,4 +1,4 @@
-// Parser contract per docs/cardledger-build-spec.md §8.
+// Parser contract per docs/architecture.md §5 ("Parser contract" subsection).
 // Model: claude-haiku-4-5-20251001 — high-volume, low-complexity extraction.
 // Temperature 0 — deterministic extraction, not generation.
 //

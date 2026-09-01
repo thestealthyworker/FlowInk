@@ -1,5 +1,6 @@
 // JOB-1 · ingest-alerts. Supabase Cron, every 2 minutes.
-// See docs/cardledger-build-spec.md §7 and §8. This is Layer 1 (LIVE) —
+// See docs/architecture.md §7 (Jobs) and §5's "Parser contract"
+// subsection. This is Layer 1 (LIVE) —
 // the primary data source. It writes `provisional` rows only; JOB-3
 // (reconcile, in GitHub Actions) is what promotes them to `confirmed`.
 //
@@ -7,8 +8,9 @@
 // watermark query returns more, process 20 and leave the watermark for the
 // next tick — backfill drains itself.
 //
-// Telegram was removed 2026-08-25 (operator decision, §10 AMENDMENT):
-// healthchecks.io is now the only out-of-band alarm (_shared/healthchecks.ts).
+// Telegram was removed 2026-08-25 (operator decision, see
+// docs/architecture.md §2): healthchecks.io is now the only out-of-band
+// alarm (_shared/healthchecks.ts).
 // Escalations below are split by what they actually mean:
 //   - the watermark being held (backlog truncation) is genuine system-down
 //     — `/fail`, an immediate alert email.
@@ -135,7 +137,8 @@ Deno.serve(async (req) => {
   // filtering below and by the transactions unique constraint either way.
   const afterSeconds = Math.floor((watermark - 60_000) / 1000);
   // Gmail's `label:Parent` does NOT match messages in nested sub-labels — they
-  // are separate labels, not a queryable hierarchy. The spec (§7) specifies
+  // are separate labels, not a queryable hierarchy (see docs/architecture.md
+  // §5, "The nested-label trap"). The old build spec specified
   // `label:Payments`, which was wrong: verified 2026-08-26 against the live
   // mailbox, `label:Payments` matched 0 messages while `label:Payments/UOB`
   // matched 10 and `label:Payments/PayLah` matched 2. The filters were correct

@@ -1,6 +1,6 @@
 // Tests for period.ts. Run: deno test supabase/functions/_shared/period_test.ts
 //
-// See docs/cardledger-build-spec.md §3 — the trap that will break this
+// See docs/architecture.md §3 — the trap that will break this
 // system if got wrong. UOB One and Citi Cash Back are statement-month
 // based (anchored to cycle_day); HSBC Revolution is calendar-month based.
 //

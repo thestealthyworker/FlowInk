@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Service-role client. Bypasses RLS by design — this is the backend
 // writer, not the dashboard. Never expose this key outside Edge Function
-// / GitHub Actions env. See docs/cardledger-build-spec.md §11.
+// / GitHub Actions env. See docs/architecture.md §10.
 export function supabaseAdmin() {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

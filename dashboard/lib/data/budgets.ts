@@ -3,8 +3,9 @@ import type { Budget, BudgetInput } from "../supabase/types";
 
 // Full CRUD, matching the RLS grant in 0008_dashboard_rls.sql
 // ("operator manages budgets" — for all, is_operator()). This table is
-// currently empty and the dashboard is its only insertion path (§10
-// AMENDMENT) — there is no migration or seed data to fall back on.
+// currently empty and the dashboard is its only insertion path
+// (docs/architecture.md §9) — there is no migration or seed data to fall
+// back on.
 
 export async function listBudgets(supabase: SupabaseClient, period?: string): Promise<Budget[]> {
   let query = supabase.from("budgets").select("*").order("category");
