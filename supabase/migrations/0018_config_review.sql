@@ -50,17 +50,27 @@
 -- submit_method_rule() computes the new row's status ITSELF, from
 -- is_operator() at call time — it never trusts p_proposed_by or any other
 -- caller-supplied value for that decision. A call made under a real
--- operator dashboard session lands 'active' immediately; every other
--- context (service_role, an Edge Function, an unauthenticated or
--- non-operator session) lands 'pending_review', unconditionally. WP7 is
--- expected to run as service_role (per this codebase's existing
--- convention: "Edge Functions and GitHub Actions write with the
--- service_role key, which bypasses RLS by design", 0001's header) —
--- under that role is_operator() reads auth.uid() as null and evaluates
--- false, so EVERY row WP7 proposes lands 'pending_review' regardless of
--- how confident the AI was or what p_proposed_by is set to. There is no
--- parameter that lets a caller mark its own proposal 'active' directly —
--- that is the enforced half of the gate this migration owns.
+-- operator dashboard session lands 'active' immediately. service_role
+-- (WP7's expected calling context — bypasses RLS entirely, per this
+-- codebase's existing convention: "Edge Functions and GitHub Actions
+-- write with the service_role key, which bypasses RLS by design", 0001's
+-- header) lands 'pending_review', unconditionally: under that role
+-- is_operator() reads auth.uid() as null and evaluates false, so EVERY
+-- row WP7 proposes lands 'pending_review' regardless of how confident
+-- the AI was or what p_proposed_by is set to. There is no parameter
+-- that lets a caller mark its own proposal 'active' directly — that is
+-- the enforced half of the gate this migration owns.
+--
+-- A non-operator AUTHENTICATED session is stricter still, not merely
+-- "also pending_review": this function is `security invoker`, so its
+-- INSERT still needs the "operator inserts method_rules" RLS policy
+-- below (`with check (is_operator())`) to pass. A non-operator session
+-- fails that check and the INSERT is blocked outright — the statement
+-- errors and rolls back, it does not silently land a pending_review row.
+-- An unauthenticated (anon) request has no INSERT grant on method_rules
+-- at all and is refused before RLS is even reached. The one path that
+-- actually returns a 'pending_review' row without an operator session is
+-- a role that bypasses RLS by grant, i.e. service_role.
 --
 -- method_rules' full new-column contract, for WP7's five-stage validator
 -- to populate:
@@ -336,9 +346,20 @@ begin
   -- THE gate: never derived from p_proposed_by or any other
   -- caller-supplied value. A real, signed-in operator session (RLS's own
   -- is_operator()) is the only thing that can produce status = 'active'
-  -- here. Everything else — service_role (WP7's expected calling
-  -- context), an unauthenticated request, a non-operator authenticated
-  -- session — lands pending_review, full stop.
+  -- here. Everything else that actually reaches this line —
+  -- service_role (WP7's expected calling context) above all — lands
+  -- pending_review, full stop.
+  --
+  -- A non-operator authenticated session does NOT reach a pending_review
+  -- row via this path: this function is `security invoker`, so its
+  -- INSERT still has to clear the "operator inserts method_rules" RLS
+  -- policy below (`with check (is_operator())`), which such a session
+  -- fails — the INSERT is blocked outright (the whole statement errors
+  -- and rolls back), not silently downgraded to pending_review. Only a
+  -- caller RLS lets through at all — an operator, or a role like
+  -- service_role that bypasses RLS entirely — ever sees this function
+  -- return; the strictness lives in the grant/policy layer, not just in
+  -- v_status here.
   v_status := case when is_operator() then 'active' else 'pending_review' end;
 
   insert into method_rules (
