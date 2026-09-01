@@ -29,7 +29,12 @@ set -euo pipefail
 
 PROJECT_REF="${SUPABASE_PROJECT_REF:?set SUPABASE_PROJECT_REF to your Supabase project ref, e.g. export SUPABASE_PROJECT_REF=<YOUR_SUPABASE_PROJECT_REF>}"
 AUTH_DIR="$HOME/cardledger-auth"
-SUPABASE_BIN="${SUPABASE_BIN:-$HOME/.local/bin/supabase}"
+# Prefer whatever `supabase` is already on PATH (covers Homebrew, npm
+# global installs, etc. — see docs/setup/supabase.md's install step, none
+# of which land at the fallback path below); fall back to the
+# direct-binary-download convention only if PATH has nothing. Override
+# with SUPABASE_BIN=/path/to/supabase if neither guess is right.
+SUPABASE_BIN="${SUPABASE_BIN:-$(command -v supabase 2>/dev/null || echo "$HOME/.local/bin/supabase")}"
 VENV_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.venv/bin/python"
 
 die() { printf '\n[FAIL] %s\n' "$1" >&2; exit 1; }
@@ -152,13 +157,13 @@ note "Refresh token captured, scope verified as gmail.readonly only."
 # ---------------------------------------------------------------------------
 # 3. Secrets only the operator can supply. Read silently — never echoed.
 #
-# HEALTHCHECKS_PING_URL is REQUIRED, not optional. With Telegram gone there is
-# no other out-of-band failure signal. Supabase Cron has no failure alerting
-# and no heartbeat: skipped runs are not retried and a paused project silently
-# stops every schedule (§7 JOB-6). A dashboard banner cannot tell you ingest
-# died, because a dead pipeline gives you no reason to open the dashboard.
-# healthchecks.io is external, so it still fires when Supabase itself is the
-# thing that broke.
+# HEALTHCHECKS_PING_URL is OPTIONAL, not required (see the note further
+# down, above the check itself, for the full reasoning and the WP3 change
+# that made this so). It's worth setting if you want it: with Telegram
+# gone there is no other out-of-band failure signal, and Supabase Cron has
+# no failure alerting or heartbeat of its own — a skipped run is not
+# retried and a paused project silently stops every schedule. But this
+# script must not refuse to proceed just because it's unset.
 # ---------------------------------------------------------------------------
 read -r -s -p "ANTHROPIC_API_KEY (input hidden): " ANTHROPIC_API_KEY; echo
 

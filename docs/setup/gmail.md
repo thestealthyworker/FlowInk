@@ -14,6 +14,18 @@ screen's publishing status: it is the single most likely silent failure
 in the entire system, and it looks completely fine for exactly seven days
 before it doesn't.
 
+**One prerequisite this guide's own recommended path needs that
+`docs/getting-started.md`'s step ordering doesn't make obvious: have your
+Anthropic API key ready before you run `scripts/setup_secrets.sh` (step 5,
+Option A, below).** That script prompts for and requires
+`ANTHROPIC_API_KEY` in the same interactive run that mints your Gmail
+refresh token — it exits with an error if you leave it blank, even though
+conceptually Gmail and Anthropic are two separate, independently-optional
+pieces. If you're following the getting-started guide's order (Gmail
+before Anthropic), either read [`anthropic.md`](anthropic.md) far enough
+to get a key first, or set the other Gmail secrets by hand (Option B)
+instead of via this script and come back to run it after you have a key.
+
 ## What this gives you, and why read-only
 
 FlowInk reads your own bank alert emails (from Gmail, via the Gmail API)
@@ -21,8 +33,8 @@ and asks Anthropic to extract structured transaction data from them. It
 never reads your bank credentials and never logs into a bank portal — it
 only ever reads mail you already receive. The Gmail OAuth scope this
 project requests is **`gmail.readonly` and nothing more**
-(`scripts/setup_secrets.sh:85`, [`docs/architecture.md`](../architecture.md)'s
-security-model section).
+(the `SCOPES` constant in `scripts/setup_secrets.sh`'s consent flow,
+[`docs/architecture.md`](../architecture.md)'s security-model section).
 
 This matters beyond "less scope is safer" as a platitude: `gmail.readonly`
 cannot send mail, cannot modify or delete anything in your mailbox, and
@@ -149,14 +161,47 @@ its own header comments explain exactly what it does and why, in more
 detail than is worth duplicating here. In short:
 
 ```
+python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt google-auth-oauthlib
 export SUPABASE_PROJECT_REF=<your-project-ref>
 bash scripts/setup_secrets.sh
 ```
 
+(The script invokes `.venv/bin/python` directly — see
+`scripts/setup_secrets.sh`'s `VENV_PY` — so it finds packages installed
+into `.venv` at the repo root without needing the venv activated first;
+create `.venv` in exactly that location, at the repo root, for this to
+work.)
+
+**`google-auth-oauthlib` is required for this step specifically and is
+deliberately not in `scripts/requirements.txt`.** The interactive consent
+flow this script runs (`from google_auth_oauthlib.flow import
+InstalledAppFlow`) is the only place in this codebase that needs it —
+none of the scheduled automation (`ingest_statements.py`, `reconcile.py`,
+`verify_token.py`) touches OAuth consent, so `scripts/requirements.txt`
+(which GitHub Actions also installs on every scheduled run) intentionally
+stays minimal rather than pulling in a package those runtimes never use.
+Install it once, locally, alongside the base requirements as shown above.
+If you skip this, the script fails with a clear message telling you to
+`pip install google-auth-oauthlib` rather than a confusing import
+traceback.
+
 It expects `~/cardledger-auth/client_secret.json` to already exist (step 4
 above), the Supabase CLI logged in and linked (see
-[`supabase.md`](supabase.md)), and a browser available on the same
-machine for the interactive Google consent step.
+[`supabase.md`](supabase.md) — including the `SUPABASE_BIN` note just
+below, if the script can't find your install), and a browser available on
+the same machine for the interactive Google consent step.
+
+**Where the script looks for the Supabase CLI:** `scripts/setup_secrets.sh`
+first checks whatever `supabase` resolves to on your `PATH` — which
+covers a Homebrew or npm install without you doing anything — and only
+falls back to `$HOME/.local/bin/supabase` (a direct-binary-download
+install location) if nothing is on `PATH`. If neither guess finds your
+install, it refuses to proceed; set `SUPABASE_BIN` to the actual path
+before running the script:
+
+```
+export SUPABASE_BIN=/path/to/supabase
+```
 
 **If you fork or modify this script, preserve how it fails.** The current
 version deliberately captures the Google consent step's stdout and stderr

@@ -7,8 +7,8 @@ everything else.
 
 By the end of this guide you will have: a Supabase project, its schema
 applied, its two extra extensions enabled, public signup disabled, and
-your own account registered as the operator so the dashboard shows you
-data instead of nothing.
+your own account created and registered as the operator so the dashboard
+shows you data instead of nothing.
 
 ## 1. Create an account and a project
 
@@ -177,22 +177,42 @@ public, and a policy that only checked "authenticated" would grant access
 to anyone who self-registers, not just you. Until your own user id is in
 that allow-list, `is_operator()` returns `false` for everyone, including
 you — every page loads, but shows no data. That's deliberate fail-closed
-behaviour, not a bug: see the full runbook and reasoning at the top of
-`supabase/migrations/0008_dashboard_rls.sql`, reproduced here because it's
-the exact sequence you need:
+behaviour, not a bug: see the runbook at the top of
+`supabase/migrations/0008_dashboard_rls.sql` for the underlying reasoning.
+The exact sequence below is more specific than that migration comment,
+because it accounts for one thing that comment doesn't spell out:
 
-1. Deploy the dashboard (see [`vercel.md`](vercel.md)) and sign in once
-   via the magic-link form at `/login`. This creates a real row in
-   `auth.users` with a real uid — it doesn't exist before your first
-   sign-in.
-2. Look up that uid — Supabase Studio's **Authentication → Users** page
-   shows it next to your email, or query it directly:
+**FlowInk's `/login` form is email + password, not a magic link — read
+this before doing anything else.** `dashboard/app/login/LoginForm.tsx`
+posts to a Server Action (`dashboard/lib/actions/auth.ts`) that calls
+Supabase's `signInWithPassword()`. Unlike a magic link, **`signInWithPassword`
+never creates an account as a side effect** — it can only authenticate a
+user that already exists in `auth.users`. There is also no sign-up UI
+anywhere in this dashboard (correct: public signup must stay disabled —
+see step 7). So the order matters and it is not optional: **the account
+has to exist in Supabase before you ever visit `/login`,** or sign-in
+will simply fail with "Invalid email or password" against an account
+that was never there to begin with.
+
+1. **Create the operator account first, before visiting `/login` at
+   all.** In Supabase Studio, go to **Authentication → Users → Add
+   user**, and set an email and a password directly (skip "send an
+   invite/magic link" — you want the account created with a password you
+   know, not an email flow). This is the step that puts a real row in
+   `auth.users` with a real uid; nothing about visiting `/login` does
+   that. If you'd rather script it, the [Admin API's `createUser`
+   method](https://supabase.com/docs/reference/javascript/auth-admin-createuser)
+   (service-role key required) does the same thing.
+2. Deploy the dashboard (see [`vercel.md`](vercel.md)) and sign in with
+   that email and password at `/login`.
+3. Look up that account's uid — Supabase Studio's **Authentication →
+   Users** page shows it next to your email, or query it directly:
 
    ```sql
    select id, email from auth.users where email = 'you@example.com';
    ```
 
-3. Insert it into the allow-list, once, via the SQL Editor (never via a
+4. Insert it into the allow-list, once, via the SQL Editor (never via a
    table the dashboard itself can write — a self-service allow-list would
    defeat the whole point of having one):
 
@@ -202,14 +222,17 @@ the exact sequence you need:
    on conflict (user_id) do nothing;
    ```
 
-4. Reload the dashboard. You should now see data (or, on a fresh
+5. Reload the dashboard. You should now see data (or, on a fresh
    deployment with nothing entered yet, an empty state that explains
    itself rather than nothing at all).
 
-If you still see no data after this, re-check step 2/3 for a typo'd
-email, and confirm the query in step 3 actually matched a row (an
+If you still see no data after this, re-check steps 3/4 for a typo'd
+email, and confirm the query in step 4 actually matched a row (an
 `insert ... select` from a `where` clause that matches nothing inserts
-zero rows silently — no error).
+zero rows silently — no error). If instead you can't sign in at all
+("Invalid email or password" on every attempt), go back to step 1 — this
+is the symptom of skipping it, since there is no account yet for the
+password form to authenticate against.
 
 ## 7. Disable public signup — required, not optional
 
@@ -223,8 +246,8 @@ against unwanted signups accumulating in your user table.
 Go to **Authentication → Providers** (or **Authentication → Sign In / Sign
 Up**, depending on your console version — look for the toggle governing
 whether new users can register) and turn off public sign-ups, leaving only
-magic-link sign-in for accounts that already exist (i.e., you, once you've
-signed in the first time in step 6 above).
+email/password sign-in for the one account that already exists (i.e., the
+operator account you created by hand in step 6 above).
 
 **Needs a real-world check:** the exact label and location of this toggle
 in the Supabase dashboard is not verified against a live console as part

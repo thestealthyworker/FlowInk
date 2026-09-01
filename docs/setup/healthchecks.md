@@ -83,14 +83,15 @@ supabase secrets set --project-ref <your-project-ref> HEALTHCHECKS_PING_URL=http
 gh secret set HEALTHCHECKS_PING_URL --body https://hc-ping.com/<your-check-uuid>
 ```
 
-If you use `scripts/setup_secrets.sh` for the Gmail setup flow, it
-prompts for this value and sets it as part of that same run — note that
-in this repo's own script, `HEALTHCHECKS_PING_URL` is currently treated as
-a hard requirement of that particular script (it will refuse to proceed
-without it), even though the app as a whole treats it as optional. If you
-don't want healthchecks.io at all, either provide a placeholder value the
-script accepts and skip actually configuring it on healthchecks.io's side,
-or set the other secrets by hand instead of via that script.
+If you use `scripts/setup_secrets.sh` for the Gmail setup flow, it prompts
+for this value (via the `HEALTHCHECKS_PING_URL` environment variable) and
+sets it as part of that same run — and, like the app as a whole, treats it
+as optional: if you leave it unset, the script prints a note that it's
+skipping the value and continues rather than refusing to proceed. If it
+*is* set, the script only validates that it looks like an
+`https://hc-ping.com/...` URL before pushing it. If you don't want
+healthchecks.io at all, just leave `HEALTHCHECKS_PING_URL` unset when you
+run the script — no placeholder value needed.
 
 ## 5. Verify it
 

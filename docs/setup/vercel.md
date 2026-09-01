@@ -97,11 +97,19 @@ correctly in Vercel's project settings (step 4), not patching the code.
 
 ## 6. First sign-in and operator registration
 
-Once deployed, visit your Vercel URL and sign in via the magic-link form
-at `/login`. If you haven't already registered yourself as the operator
-in Supabase (`app_admin` table), every page will load but show no data —
-that's expected fail-closed behaviour, not a broken deploy. See
-[`supabase.md`](supabase.md) step 6 for the exact steps to fix that.
+Once deployed, visit your Vercel URL and sign in at `/login` — **this is
+an email + password form, not a magic link.** It only works if you
+already created the operator account by hand in Supabase Studio
+(**Authentication → Users → Add user**) *before* this point: see
+[`supabase.md`](supabase.md) step 6, which you should have already done
+as part of Supabase setup. If you skipped it, sign-in will fail with
+"Invalid email or password" — go do that first, there is nothing wrong
+with this Vercel deploy.
+
+Once you can sign in, if you haven't yet registered yourself as the
+operator in Supabase (the `app_admin` table — also covered in
+[`supabase.md`](supabase.md) step 6), every page will load but show no
+data — that's expected fail-closed behaviour, not a broken deploy.
 
 ## What's next
 

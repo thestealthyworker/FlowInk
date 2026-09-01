@@ -24,7 +24,7 @@ Supabase's Edge Functions run on Deno and cannot shell out to `qpdf` to
 decrypt a password-protected PDF — a genuine runtime constraint, not an
 arbitrary choice.
 
-## The seven secrets, and which runtime actually needs which
+## The nine secrets, and which runtime actually needs which
 
 GitHub Actions is a **separate runtime from Supabase Edge Functions and
 cannot read Supabase's secret store** — every value both runtimes need has
@@ -43,6 +43,8 @@ Set these in your repo's **Settings → Secrets and variables → Actions**:
 | `GMAIL_CLIENT_SECRET` | From [`gmail.md`](gmail.md) | Yes, if using live ingest too |
 | `ANTHROPIC_API_KEY` | From [`anthropic.md`](anthropic.md) | Yes, if using live ingest too |
 | `STATEMENT_PDF_PASSWORD` | See below | No — this one is GitHub-Actions-only |
+| `STATEMENT_GMAIL_QUERY` | Optional. Custom Gmail search query for statement emails; falls back to a built-in default if unset. | No — only `ingest-statements.yml` reads it |
+| `STATEMENT_SENDER_DOMAINS` | Optional. Overrides the sender-domain allowlist used to route statement emails (`scripts/lib/senders.py`); falls back to a built-in default if unset. | Not applicable — both `ingest-statements.yml` and `reconcile.yml` read this one directly, there's no separate Edge Function equivalent |
 
 `HEALTHCHECKS_PING_URL` is also read by `reconcile.yml` if you've set up
 [healthchecks.io](healthchecks.md) — add it here too if so.
@@ -56,13 +58,17 @@ gh secret set GMAIL_CLIENT_SECRET --body <your-client-secret>
 gh secret set ANTHROPIC_API_KEY --body <your-anthropic-key>
 gh secret set STATEMENT_PDF_PASSWORD --body <your-pdf-password>
 gh secret set HEALTHCHECKS_PING_URL --body <your-healthchecks-url>
+# Only if you want to override the built-in defaults:
+gh secret set STATEMENT_GMAIL_QUERY --body <your-custom-query>
+gh secret set STATEMENT_SENDER_DOMAINS --body <your-sender-domain-json>
 ```
 
 `scripts/setup_secrets.sh` sets the first six of these for you
 automatically (as a mirror of the Gmail setup flow) if the `gh` CLI is
 installed and authenticated when you run it — see [`gmail.md`](gmail.md).
-It does **not** set `STATEMENT_PDF_PASSWORD` (see below) or
-`HEALTHCHECKS_PING_URL` into the GitHub store; set those by hand if you
+It does **not** set `STATEMENT_PDF_PASSWORD` (see below),
+`HEALTHCHECKS_PING_URL`, `STATEMENT_GMAIL_QUERY`, or
+`STATEMENT_SENDER_DOMAINS` into the GitHub store; set those by hand if you
 need them.
 
 ## `STATEMENT_PDF_PASSWORD` — genuinely optional, and specific to your own bank
@@ -80,20 +86,22 @@ If your statements are protected, `scripts/ingest_statements.py` reads
 to try, so you can set more than one if you have statements from multiple
 sources with different passwords.
 
-## Two more env vars this project's code reads but does not wire into the workflow by default
+## Two more env vars this project's code reads, already wired into both workflows
 
 `scripts/ingest_statements.py` also reads `STATEMENT_GMAIL_QUERY` (a
 custom Gmail search query for finding statement emails, falling back to a
 built-in default if unset) and `STATEMENT_SENDER_DOMAINS` (an override of
 the sender-domain allowlist used to route statement emails, see
-`scripts/lib/senders.py`). **As shipped, neither of these is passed
-through by `ingest-statements.yml`'s `env:` block** — the workflow only
-forwards the seven secrets listed above. If you need to override either
-default, you'll need to add the corresponding line to the workflow file's
-`env:` block yourself, in addition to setting the GitHub secret. This is a
-real gap between what the code can read and what the shipped workflow
-currently passes through — worth knowing before you set one of these
-secrets and wonder why it isn't taking effect.
+`scripts/lib/senders.py`). **Both are already forwarded** in
+`ingest-statements.yml`'s `env:` block — setting either GitHub secret
+takes effect on the next run with no workflow-file edit needed.
+`STATEMENT_SENDER_DOMAINS` is also forwarded separately by
+`reconcile.yml`, since `reconcile.py` reads the same env var directly
+(without a live DB read) to resolve which methods are reconcilable at
+all; `STATEMENT_GMAIL_QUERY` is not needed there, since `reconcile.py`
+never searches Gmail itself. If you don't need to override either
+default, you can ignore both secrets entirely — the built-in defaults are
+what this project's own reference deployment uses.
 
 ## Why the workflow pins actions to a commit SHA, not a version tag — don't "simplify" this back
 

@@ -7,15 +7,28 @@ service-role key so it bypasses RLS.
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any
 
 import requests
 
 
+def _require_env(name: str) -> str:
+    """Read an env var, or fail with a clear message naming it — instead of
+    letting a bare ``os.environ[name]`` raise an unhelpful raw ``KeyError``
+    traceback with no indication of which variable was missing or what to
+    do about it."""
+    try:
+        return os.environ[name]
+    except KeyError:
+        sys.exit(f"error: {name} is required but not set in the environment. "
+                  f"export {name}=... before running this script.")
+
+
 class SupabaseREST:
     def __init__(self) -> None:
-        url = os.environ["SUPABASE_URL"].rstrip("/")
-        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+        url = _require_env("SUPABASE_URL").rstrip("/")
+        key = _require_env("SUPABASE_SERVICE_ROLE_KEY")
         self.base = f"{url}/rest/v1"
         self.headers = {
             "apikey": key,

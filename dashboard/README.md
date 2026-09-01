@@ -1,15 +1,24 @@
 # dashboard/
 
 Next.js (App Router, TypeScript) app, deployed to Vercel from this
-directory as the project's Root Directory. Phase 5 — see
-`../docs/cardledger-build-spec.md` §10 (dashboard, especially the
-AMENDMENT dated 2026-08-25) and §12.
+directory as the project's Root Directory. See
+[`../docs/architecture.md`](../docs/architecture.md) (the dashboard's
+place in the overall design, §9-10) and
+[`../docs/reference-example-sg.md`](../docs/reference-example-sg.md) (the
+worked example this dashboard renders).
 
-**This pass built the security foundation only**: Supabase Auth (magic
-link) gating every page via `middleware.ts`, RLS-scoped reads/writes
-through `@supabase/ssr`, budget CRUD, manual (non-card) transaction entry,
-and the merchant triage table. Visual design is a separate, not-yet-started
-pass — every page here is plain, unstyled, semantic HTML, deliberately.
+Auth gating every page via `middleware.ts` is Supabase Auth with an
+**email + password** form (`app/login/LoginForm.tsx` →
+`lib/actions/auth.ts`, `supabase.auth.signInWithPassword()`) —
+deliberately not a magic link (see the comment at the top of
+`lib/actions/auth.ts` for why). There is exactly one account: it is
+created by hand in Supabase Studio, never through this UI (there is no
+sign-up form), and this dashboard never creates accounts as a side effect
+of anything. RLS-scoped reads/writes go through `@supabase/ssr`. Pages
+cover budgets, card status and reward-tier tracking, manual (non-card)
+transaction entry, the merchant triage table, and the payment-method /
+rule config surface. Visual design is intentionally plain, unstyled,
+semantic HTML throughout — there has not been a dedicated design pass.
 
 ## Env vars — the complete list, ever
 
@@ -34,14 +43,25 @@ or export them in the shell/CI) before building.
 1. `npm install`
 2. Copy `.env.local.example` to `.env.local` and fill in the two values
    (`supabase projects api-keys --project-ref <YOUR_SUPABASE_PROJECT_REF>`).
-3. `npm run dev`, sign in once via the magic-link form at `/login`.
-4. Register that session's uid as the operator — see the runbook at the
-   top of `../supabase/migrations/0008_dashboard_rls.sql`. Until this
-   runs, every page will load but show no data: `is_operator()` returns
-   false for everyone, including the real operator, by design (fail-closed).
-5. **Disable public signup** on the Supabase project (Dashboard →
+3. **Create the operator's account before doing anything else here.**
+   `/login` is email + password, not a magic link, and
+   `signInWithPassword()` never creates an account as a side effect — if
+   no user exists yet in `auth.users`, sign-in just fails. Create it in
+   Supabase Studio (**Authentication → Users → Add user**, set an email +
+   password) or via the Admin API. See
+   [`../docs/setup/supabase.md`](../docs/setup/supabase.md) step 6 for the
+   full walkthrough.
+4. `npm run dev`, then sign in with that email and password at `/login`.
+5. Register that account's uid as the operator — see the runbook at the
+   top of `../supabase/migrations/0008_dashboard_rls.sql` and
+   [`../docs/setup/supabase.md`](../docs/setup/supabase.md) step 6. Until
+   this runs, every page will load but show no data: `is_operator()`
+   returns false for everyone, including the real operator, by design
+   (fail-closed).
+6. **Disable public signup** on the Supabase project (Dashboard →
    Authentication → Sign In / Providers). Not done by any migration or CLI
-   command — see `../docs/SETUP_STATUS.md`'s Phase 5 section for why.
+   command — see [`../docs/setup/supabase.md`](../docs/setup/supabase.md)
+   step 7 for why.
 
 ## Structure
 
@@ -53,6 +73,9 @@ or export them in the shell/CI) before building.
 - `lib/actions/` — Server Actions wrapping `lib/data/` for the forms in
   `app/`.
 - `app/(protected)/` — every page behind the auth gate: `/` (this-month
-  proof-of-read view), `/budgets`, `/transactions/new`, `/triage`.
-- `app/login`, `app/auth/callback` — the two routes middleware treats as
-  public.
+  proof-of-read view), `/budgets`, `/cards` and `/cards/tier-3` (reward
+  tracking), `/config` (payment methods, rule review, the example-data
+  loader), `/transactions/new`, `/triage`.
+- `app/login` — the only route `middleware.ts`'s `PUBLIC_PATHS` treats as
+  public. There is no `app/auth/callback` route (or any other public
+  route) in this dashboard.
