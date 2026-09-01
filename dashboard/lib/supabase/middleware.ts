@@ -8,10 +8,12 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-// docs/cardledger-build-spec.md §10: "The middleware redirect is UX, not
-// security. Someone can always hit the Supabase REST endpoint directly
-// and skip the frontend entirely. If RLS is wrong, the middleware will
-// not save you." RLS (Task 1) is the real gate; this only keeps a signed-
+// The middleware redirect is UX, not security. Someone can always hit the
+// Supabase REST endpoint directly and skip the frontend entirely. If RLS
+// is wrong, the middleware will not save you (the old build spec's exact
+// quoted framing for this isn't carried over verbatim, but
+// docs/architecture.md §10's "Three independent gates protect the data"
+// makes the same point: RLS is the real gate). This only keeps a signed-
 // out browser from seeing empty/broken pages instead of a sign-in screen.
 //
 // Uses getUser(), never getSession(): getSession() only reads the JWT out

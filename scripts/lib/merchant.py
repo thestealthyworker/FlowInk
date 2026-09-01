@@ -1,5 +1,6 @@
 """Python port of supabase/functions/_shared/merchant.ts — keep both in
-sync. See docs/cardledger-build-spec.md §4 parser trap 5.
+sync. See docs/reference-example-sg.md's "Alert email formats and parser
+traps" section, trap 5.
 """
 from __future__ import annotations
 

@@ -1,5 +1,7 @@
 """Parser regression test against the confirmed alert-email fixtures
-(docs/cardledger-build-spec.md §4, §8). Every parser change should run
+(docs/reference-example-sg.md's "Alert email formats and parser traps"
+section, and docs/architecture.md §5's "Parser contract" subsection).
+Every parser change should run
 against these — add a new fixture + expected.json pair whenever a new
 bank format is first encountered, or a parse_failures row is fixed.
 

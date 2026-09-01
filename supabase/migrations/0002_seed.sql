@@ -14,5 +14,5 @@
 -- recorded 0002 as applied does not need special handling.
 --
 -- See 0018_config_review.sql's header for the full contract, and
--- docs/cardledger-build-spec.md §5 for the original T&C citations behind
--- the example numbers (unchanged, just relocated).
+-- docs/reference-example-sg.md's "Sources" section for the original T&C
+-- citations behind the example numbers (unchanged, just relocated).

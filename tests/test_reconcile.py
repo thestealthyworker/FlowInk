@@ -1,9 +1,12 @@
 """Pure logic tests for reconciliation matching, no network.
 
-Covers the two defects called out in docs/cardledger-build-spec.md §4
-trap 1 and §7's PayLah note: an FX transaction must reconcile by
-comparing like-currency amounts, and a method with no statement source
-(PayLah) must never be scoped into the stale-reversal sweep.
+Covers the two defects called out in docs/reference-example-sg.md's
+"Alert email formats and parser traps" section, trap 1 (the FX
+transaction must reconcile by comparing like-currency amounts), and a
+PayLah-specific note the old build spec kept alongside its §7 Jobs
+section that does not survive in docs/architecture.md §7 under that
+number: a method with no statement source (PayLah) must never be scoped
+into the stale-reversal sweep.
 
 Run: pytest tests/test_reconcile.py -v
 """

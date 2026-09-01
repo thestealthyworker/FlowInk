@@ -1,5 +1,5 @@
 // JOB-6 · heartbeat. Supabase Cron, hourly.
-// See docs/cardledger-build-spec.md §7. Supabase Cron has no failure
+// See docs/architecture.md §7. Supabase Cron has no failure
 // alerting and no heartbeat of its own — this pings an external dead-man's
 // switch (healthchecks.io) every hour, and separately asserts that every
 // active payment method has seen at least one alert-sourced transaction
@@ -7,8 +7,9 @@
 // the most likely real-world failure and is invisible in an aggregate
 // check, so this checks per-source, not just "did anything ingest".
 //
-// Telegram was removed 2026-08-25 (operator decision, §10 AMENDMENT):
-// warnings and triage move to the web dashboard (Phase 5, not yet built).
+// Telegram was removed 2026-08-25 (operator decision, see
+// docs/architecture.md §2): warnings and triage move to the web dashboard
+// (Phase 5, not yet built).
 // healthchecks.io is now the only out-of-band alarm, so the per-source
 // silence check below fires a `/fail` ping (immediate alert email)
 // instead of a Telegram message — see _shared/healthchecks.ts.

@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """JOB-2 · ingest-statements. GitHub Actions, daily 09:00 SGT.
 
-See docs/cardledger-build-spec.md §7 and §2 ("why two runtimes"): this is
+See docs/architecture.md §7 and §2 ("why two runtimes"): this is
 the one job that needs to shell out to `qpdf` to decrypt a password
 protected statement PDF, which Supabase Edge Functions (Deno, no native
 binaries) cannot do.
 
 Decrypted PDF bytes never leave this process's temp directory, and the
-runner is destroyed on completion (§11) — nothing here writes outside
-`tempfile.mkdtemp()`, and that directory is removed explicitly in
-`finally` as defence in depth on top of that.
+runner is destroyed on completion (docs/architecture.md §10) — nothing
+here writes outside `tempfile.mkdtemp()`, and that directory is removed
+explicitly in `finally` as defence in depth on top of that.
 
-STATEMENT_GMAIL_QUERY is not fixed in the build spec (§13 item 5 is still
-open: "confirm whether statement emails carry a PDF attachment or just a
-login link"). The default below is a reasonable starting point; tune it
-once real statement emails are seen, without touching code.
+STATEMENT_GMAIL_QUERY is not fixed in the old build spec (its "§13 item 5"
+— still open there as "confirm whether statement emails carry a PDF
+attachment or just a login link" — has no equivalent home in
+docs/architecture.md or docs/reference-example-sg.md). The default below
+is a reasonable starting point; tune it once real statement emails are
+seen, without touching code.
 """
 from __future__ import annotations
 

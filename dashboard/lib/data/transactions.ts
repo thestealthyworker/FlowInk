@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ManualTransactionInput, Transaction } from "../supabase/types";
 
-// The manual-entry write path (§10 AMENDMENT, §14 "cash is invisible").
+// The manual-entry write path (docs/architecture.md §9, "Manual entry and
+// the dashboard as an input surface", and §11's "cash ... is invisible").
 // method_id is always 'manual' (0009_manual_payment_method.sql) —
 // non-card spend has no other bucket to point at. source_ref is
 // deliberately omitted: the schema's own CHECK constraint

@@ -1,12 +1,13 @@
 // Both cron-driven Edge Functions (ingest-alerts, heartbeat — nudge and
-// merchant-triage were removed along with Telegram, 2026-08-25, §10
-// AMENDMENT) are invoked by Supabase Cron via pg_cron -> pg_net with a
-// bearer token pulled from Vault. This checks that token so the function
-// can't be hit by anyone who finds the URL. See
-// docs/cardledger-build-spec.md §7 JOB-1 and §12 item 9 — confirm the
-// current pg_cron -> Edge Function pattern against live Supabase docs
-// before wiring the cron job itself; this check is deliberately
-// transport-agnostic (just "does the bearer match").
+// merchant-triage were removed along with Telegram, 2026-08-25, see
+// docs/architecture.md §2) are invoked by Supabase Cron via pg_cron ->
+// pg_net with a bearer token pulled from Vault. This checks that token so
+// the function can't be hit by anyone who finds the URL. See
+// docs/architecture.md §7 — both the Jobs table's ingest-alerts (JOB-1)
+// entry and its note on confirming the current pg_cron -> Edge Function
+// auth pattern against live Supabase docs before wiring the cron job
+// itself; this check is deliberately transport-agnostic (just "does the
+// bearer match").
 //
 // Note that pg_net sends this secret as a bearer token, NOT as a JWT, so
 // every function is deployed with verify_jwt = false (supabase/config.toml)

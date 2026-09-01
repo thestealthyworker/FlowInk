@@ -1,11 +1,17 @@
 """Exact-domain sender allowlist for statement email routing.
 
-docs/cardledger-build-spec.md §4 trap 3 and §11. A substring test such as
-``"uobgroup.com" in sender`` is not a sender check: an attacker who owns
-``attacker.io`` can send from ``statements@uobgroup.com.attacker.io``,
-pass SPF/DKIM/DMARC legitimately for their own domain, and be routed to a
-real card. Statement rows are written as ``status='confirmed'``, which the
-spec designates as truth, so a bad route here corrupts the ledger.
+See docs/architecture.md §5 ("Routing is data, not code" — the
+`alert_senders`/`statement_senders` exact-domain arrays this module
+resolves against) and §10 (security model). The old build spec's "trap 3"
+enumeration this citation used to point at does not survive under that
+number in docs/reference-example-sg.md's current parser-traps list, so
+the anti-spoofing rationale below is preserved here rather than cited
+elsewhere: a substring test such as ``"uobgroup.com" in sender`` is not a
+sender check: an attacker who owns ``attacker.io`` can send from
+``statements@uobgroup.com.attacker.io``, pass SPF/DKIM/DMARC legitimately
+for their own domain, and be routed to a real card. Statement rows are
+written as ``status='confirmed'``, which the schema treats as truth, so a
+bad route here corrupts the ledger.
 
 So: parse the address out of the ``From`` header and compare the domain to
 the right of the final ``@`` against an exact allowlist. No substring, no

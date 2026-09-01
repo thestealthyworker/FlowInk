@@ -1,6 +1,6 @@
 """Pure logic tests, no network. Run: pytest tests/test_period.py
 
-See docs/cardledger-build-spec.md §3 — the trap that will break this
+See docs/architecture.md §3 — the trap that will break this
 system if got wrong. UOB One and Citi Cash Back are statement-month
 based (anchored to cycle_day); HSBC Revolution is calendar-month based.
 """

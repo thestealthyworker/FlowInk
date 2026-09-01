@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """JOB-3 · reconcile. GitHub Actions, runs immediately after JOB-2.
 
-See docs/cardledger-build-spec.md §7. Matches provisional (alert-sourced)
+See docs/architecture.md §7. Matches provisional (alert-sourced)
 rows against confirmed (statement-sourced) rows on
 (method_id, amount ±2%, txn_date ±3 days, merchant fuzzy).
 
@@ -28,11 +28,13 @@ rule but not how to avoid double-counting spend once both rows exist:
   alert that should have fired and didn't. Miss rate = unmatched
   statement rows introduced since the previous reconcile run / statement
   rows introduced since the previous reconcile run. Above 5% means the
-  alert threshold isn't low enough (§7) — reported via a healthchecks.io
-  `/log` ping (see `escalate_log` below; Telegram was removed 2026-08-25,
-  docs/cardledger-build-spec.md §10 AMENDMENT).
+  bank-side alert threshold isn't low enough (docs/architecture.md §7,
+  "Why the per-source silence check matters specifically") — reported via
+  a healthchecks.io `/log` ping (see `escalate_log` below; Telegram was
+  removed 2026-08-25, see docs/architecture.md §2).
 
-FX handling (§4 trap 1): a UOB alert stores the transaction in its
+FX handling (docs/reference-example-sg.md's "Alert email formats and
+parser traps" section, trap 1): a UOB alert stores the transaction in its
 ORIGINAL foreign currency (UOB never converts in the alert body) while the
 statement stores the SGD-billed amount plus fx_amount = the original
 foreign amount. Comparing provisional.amount (foreign) against
@@ -363,12 +365,21 @@ def main() -> int:
     )
 
     if total_statement_this_run > 0 and miss_rate > MISS_RATE_ALERT_THRESHOLD:
-        # A high miss rate is a data-quality signal (alert thresholds not
-        # low enough, §13 item 1) — not evidence the system itself is
-        # down — so /log rather than /fail. This is JOB-3's most
-        # important health metric (§7); it must keep reaching the
-        # operator now that Telegram is gone (docs/cardledger-build-
-        # spec.md §10 AMENDMENT).
+        # A high miss rate is a data-quality signal (bank-side alert
+        # thresholds not low enough — the old build spec's "§13 item 1" no
+        # longer has a home in docs/architecture.md or
+        # docs/reference-example-sg.md; see docs/architecture.md §7, "Why
+        # the per-source silence check matters specifically", for the
+        # closest surviving discussion of this failure mode) — not
+        # evidence the system itself is down — so /log rather than /fail.
+        # This is JOB-3's most important health metric (§7); it must keep
+        # reaching the operator now that Telegram is gone (see
+        # docs/architecture.md §2).
+        # NOTE: the message text below still cites the retired
+        # docs/cardledger-build-spec.md §13 item 1 — left as-is since it's
+        # a log message sent to healthchecks.io, not a comment; fixing it
+        # is a text change to runtime output, out of scope for a
+        # comments-only cleanup.
         escalate_log(
             f"reconcile miss rate {miss_rate:.1%}: {unmatched_statement_this_run}/{total_statement_this_run} "
             "statement transactions from this run had no matching alert. Alert thresholds probably need "

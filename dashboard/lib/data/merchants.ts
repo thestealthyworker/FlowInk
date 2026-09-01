@@ -3,9 +3,9 @@ import type { Merchant, MerchantTriageUpdate, Transaction } from "../supabase/ty
 
 // Task 4: merchant triage. 251 merchants sit at confidence = 'guessed'
 // (loaded 2026-08-25, see docs/SETUP_STATUS.md); ~51 seen 2+ times are
-// the real burden this absorbed from the deleted Telegram job (§10
-// AMENDMENT). This module only ever touches category / is_transfer /
-// confidence — 0008_dashboard_rls.sql's column-level grant on merchants
+// the real burden this absorbed from the deleted Telegram job (see
+// docs/architecture.md §2). This module only ever touches
+// category / is_transfer / confidence — 0008_dashboard_rls.sql's column-level grant on merchants
 // enforces that server-side even if a caller here tried to send more.
 
 export interface MerchantTriageRow {

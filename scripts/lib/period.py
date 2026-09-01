@@ -1,5 +1,5 @@
 """Python port of supabase/functions/_shared/period.ts — keep both in sync.
-See docs/cardledger-build-spec.md §3: card periods are not calendar
+See docs/architecture.md §3: card periods are not calendar
 months, and are not the same as each other.
 """
 from __future__ import annotations

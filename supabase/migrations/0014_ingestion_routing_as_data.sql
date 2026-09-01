@@ -54,7 +54,7 @@ alter table payment_methods
 comment on column payment_methods.alert_label is
   'Gmail label routing an alert email to this method, e.g. ''Payments/UOB''. NULL = alert-path routing not configured for this method.';
 comment on column payment_methods.alert_senders is
-  'Exact From-header domain(s) trusted for this method''s alert emails, e.g. ''{uobgroup.com}''. NULL or ''{}'' MUST be treated identically to "no expected domain configured": reject, never fall through as a pass. Exact match only, no substring/suffix — see ingest-alerts/index.ts''s anti-spoofing check (build spec §4 trap 3).';
+  'Exact From-header domain(s) trusted for this method''s alert emails, e.g. ''{uobgroup.com}''. NULL or ''{}'' MUST be treated identically to "no expected domain configured": reject, never fall through as a pass. Exact match only, no substring/suffix — see ingest-alerts/index.ts''s anti-spoofing check (docs/architecture.md §5, "Routing is data, not code" — the old build spec''s "trap 3" this used to cite does not survive under that number in docs/reference-example-sg.md''s current parser-traps list).';
 comment on column payment_methods.statement_senders is
   'Exact From-header domain(s) trusted for this method''s statement emails. May differ from alert_senders (statement notices often come from a different subdomain than transaction alerts, e.g. hsbc_revo below). Same NULL/empty = reject rule as alert_senders.';
 comment on column payment_methods.currency is

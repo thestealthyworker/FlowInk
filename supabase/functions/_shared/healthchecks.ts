@@ -1,9 +1,11 @@
 // The only out-of-band alarm left once Telegram is gone (operator decision,
-// docs/cardledger-build-spec.md AMENDMENT 2026-08-25 in §10, and §7 JOB-6:
-// "Supabase Cron has no failure alerting and no heartbeat... since this
-// system's only job is to not miss things, silent failure is the primary
-// risk"). healthchecks.io is a dead-man's-switch: it alerts by email when
-// pings *stop*, which is what catches a paused project or a silently
+// 2026-08-25, see docs/architecture.md §2), matching the `heartbeat` job's
+// current description in §7: Supabase Cron has no failure alerting of its
+// own, and the per-source silence check exists because a bank quietly
+// reverting an alert threshold is otherwise invisible to an aggregate
+// "did anything ingest today" check. healthchecks.io is a dead-man's-
+// switch: it alerts by email when pings *stop*, which is what catches a
+// paused project or a silently
 // dropped cron schedule that no in-process check could ever see.
 //
 // Three request shapes, same base URL:

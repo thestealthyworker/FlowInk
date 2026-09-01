@@ -1,6 +1,6 @@
 name: Ingest Statements
 
-# JOB-2 (docs/cardledger-build-spec.md §7). GitHub Actions runtime because
+# JOB-2 (docs/architecture.md §7). GitHub Actions runtime because
 # Supabase Edge Functions (Deno) cannot shell out to qpdf to decrypt a
 # password-protected statement PDF (§2). Runs daily; reconcile.yml runs
 # immediately after via workflow_run.

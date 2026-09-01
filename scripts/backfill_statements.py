@@ -9,7 +9,7 @@ decryption, and no watermark: the extraction already happened and was
 verified by hand (see docs handoff for this task).
 
 Reuses scripts/lib/merchant.py, scripts/lib/period.py (unmodified — see
-docs/cardledger-build-spec.md §4: two period models, stored separately,
+docs/architecture.md §3: two period models, stored separately,
 never collapsed), scripts/lib/validate.py, and scripts/lib/supabase_rest.py.
 The content-hash source_ref scheme is the same one scripts/ingest_statements.py
 uses (see `content_hash` below) — not a second idempotency mechanism.
@@ -34,8 +34,10 @@ to a positive amount, and the sign is preserved as *meaning* rather than as
     only the credit row. txn_status already has 'reversed' in its enum
     (0001_schema.sql) for exactly this case. Dropping both rows (the
     earlier approach) got the arithmetic right but destroyed the audit
-    trail for a real transaction — the exact thing docs/cardledger-build-
-    spec.md §4 calls the statement layer out as existing to preserve.
+    trail for a real transaction — the exact thing docs/architecture.md
+    §1 calls the statement layer out as existing to preserve ("Statements
+    are the audit trail, used to confirm and correct what the alerts
+    already recorded, not to originate the data").
     Keeping the purchase as 'reversed' preserves that trail while still
     contributing $0 to spend, PROVIDED every spend-total consumer excludes
     status = 'reversed' — verified true for supabase/functions/nudge/
@@ -46,8 +48,11 @@ to a positive amount, and the sign is preserved as *meaning* rather than as
     comment for the audit).
     Example: an HSBC statement export with "Riverside Home Store" +214.75
     (kept, status='reversed') and a matching -214.75 credit line a few days
-    later (skipped) — the exact scenario docs/cardledger-build-spec.md §4's
-    confirmed sample describes. See the dry-run report for the count.
+    later (skipped) — the same class of scenario the old, pre-split build
+    spec's §4 worked through with a specific confirmed sample; that
+    specific sample was not carried over into docs/architecture.md or
+    docs/reference-example-sg.md, so there is no current citation for it.
+    See the dry-run report for the count.
   - Every OTHER negative-in-source row — credit-card bill payments
     ("PAYMT THRU E-BANK...", "PAYMENT VIA ... VISA DIRECT", "BILL PAYMENT -
     DBS..."), cashback/rebate credits ("ONE CARD ADDITIONAL REBATE", "UOB
@@ -61,7 +66,8 @@ to a positive amount, and the sign is preserved as *meaning* rather than as
     Storing them (rather than silently omitting them, option B in the task
     brief) keeps one uniform rule instead of a special case for cards vs
     PayLah, and matches how PayLah top-ups are explicitly required to be
-    handled (§4: "flagged is_transfer = true", not omitted).
+    handled (docs/reference-example-sg.md's "DBS PayLah!" section:
+    "flagged is_transfer = true", not omitted).
 
 This is a deliberate choice among the options the task brief allows
 ("storing them as positive with a distinguishing flag, or excluding
@@ -73,9 +79,10 @@ that a plain omission would throw away.
 
 ============ PayLah transfer classification ============
 
-docs/cardledger-build-spec.md §4: PayLah nets to exactly 0.00 per statement
-because every payment is paired with a same-amount "TOP UP WALLET FROM MY
-ACCOUNT". Counting both sides as spend double-counts; counting neither
+Per docs/reference-example-sg.md's "DBS PayLah!" section: PayLah nets to
+exactly 0.00 per statement because every payment is paired with a
+same-amount "TOP UP WALLET FROM MY ACCOUNT". Counting both sides as spend
+double-counts; counting neither
 zeroes out genuine spend. `classify_paylah_payment_side` implements:
 
   - "TOP UP WALLET FROM MY ACCOUNT" (always negative in source) -> transfer,

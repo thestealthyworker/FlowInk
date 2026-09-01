@@ -1,13 +1,32 @@
--- Phase 3: the rules engine. See docs/cardledger-build-spec.md §9 (rules
--- engine), §3 (the period trap), §5 (seed data + "rules that do not fit
--- the table"). §7 JOB-4 was the original consumer this was built against;
--- the Telegram nudge it described has since been dropped from the
--- project in favour of the Phase 5 web dashboard — see the note further
--- down on what that does and does not change here.
+-- Phase 3: the rules engine. See docs/architecture.md §6 (rules engine
+-- design — including the `rule_overrides` escape hatch for "rules that do
+-- not fit the table"), §3 (the period trap), and docs/reference-example-
+-- sg.md's "Sources" section (seed data + the original T&C citations). The
+-- original build spec cited "JOB-4" here as the consumer this was built
+-- against — the Telegram nudge job; it has since been dropped, along with
+-- the rest of the Telegram bot, in favour of the Phase 5 web dashboard
+-- (see docs/architecture.md §2), and no longer appears in §7's Jobs
+-- table — see the note further down on what that does and does not
+-- change here.
 --
--- HARD CONSTRAINT (§9): "The model may parse and classify; it must never
--- decide whether a threshold was met." Everything below is deterministic
--- SQL / PL/pgSQL. No network call, no LLM, in this file.
+-- HARD CONSTRAINT (docs/architecture.md §6): "The model may parse and
+-- classify; it must never decide whether a threshold was met."
+-- Everything below is deterministic SQL / PL/pgSQL. No network call, no
+-- LLM, in this file.
+--
+-- A NOTE ON THE MANY BARE "§N" CROSS-REFERENCES BELOW: this migration's
+-- own comments cite section numbers throughout (§3, §4, §5, §6, §9,
+-- §13...) assuming the single pre-split build spec named above. That
+-- numbering does not carry over cleanly post-split and is not
+-- individually corrected below, migration by migration, to avoid rewriting
+-- this file's history — treat every bare "§N" from here on as a pointer
+-- into that retired document, not into docs/architecture.md or
+-- docs/reference-example-sg.md. For the generic rules-engine mechanics
+-- these comments describe (largely superseded by the current, generic
+-- evaluator — see docs/architecture.md §6, "From per-card functions to
+-- one generic evaluator"), consult docs/architecture.md directly; for the
+-- Singapore-specific UOB/HSBC/Citi mechanics, consult the matching
+-- card section of docs/reference-example-sg.md.
 --
 -- Every function is `security invoker` (never `security definer`) per the
 -- 0001_schema.sql defence-in-depth comment: a security definer function

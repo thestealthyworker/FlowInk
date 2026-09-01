@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Gmail refresh-token smoke test and day-8 diagnostic.
 
-See docs/cardledger-build-spec.md §7 and §12 (0A(ii), 0B): if the Google
-Cloud OAuth consent screen was left in "Testing" publishing status, the
+See docs/setup/gmail.md §3 ("Configure the OAuth consent screen") and §9
+("The day-8 check") — this content moved into that setup guide rather
+than either of the two docs the old build spec's architecture material
+split into. If the Google Cloud OAuth consent screen was left in
+"Testing" publishing status, the
 refresh token silently expires after 7 days — the pipeline works all week
 then dies every Sunday. Run this once right after capturing the token, and
 again on day 8. If it fails on day 8, the consent screen was never

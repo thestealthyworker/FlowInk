@@ -1,9 +1,10 @@
-// The fixed category vocabulary from docs/cardledger-build-spec.md §4.
+// The fixed category vocabulary from docs/architecture.md §4.
 //
 // Single source of truth for the 11-category vocabulary. Telegram-based
 // merchant-triage and its telegram-webhook validator were removed
-// 2026-08-25 (operator decision, §10 AMENDMENT) — merchant triage moves to
-// the web dashboard (Phase 5, not yet built), which will import CATEGORIES
+// 2026-08-25 (operator decision, see docs/architecture.md §2) — merchant
+// triage moves to the web dashboard (Phase 5, not yet built), which will
+// import CATEGORIES
 // the same way those two functions did: to render the category picker and
 // to validate writes against it server-side rather than trusting whatever
 // a client sends. Ingest also imports it (isCategory-style validation

@@ -1,6 +1,6 @@
--- Phase 5: dashboard RLS. See docs/cardledger-build-spec.md §10 (dashboard,
--- especially the AMENDMENT dated 2026-08-25 which makes the dashboard a
--- write surface, not read-only) and §11 (security).
+-- Phase 5: dashboard RLS. See docs/architecture.md §9 (dashboard as an
+-- input surface, especially the amendment dated 2026-08-25 which makes
+-- the dashboard a write surface, not read-only) and §10 (security model).
 --
 -- Every table has had RLS enabled + FORCE ROW LEVEL SECURITY since
 -- 0001_schema.sql, with zero policies (default-deny) and all grants
@@ -20,12 +20,13 @@
 --
 -- ============ HOW THE OPERATOR'S UID GETS SET ============
 --
--- The uid does not exist until the operator has actually signed in once,
--- so it cannot be baked into this migration as a literal (and should not
--- be — a hardcoded uid in a versioned file is exactly the kind of
--- placeholder that ships unmodified into a template and either grants
--- access to the wrong account or, worse, to no account, silently locking
--- the operator out with no visible error). Instead:
+-- The uid does not exist until the operator account has actually been
+-- created (step 2 below), so it cannot be baked into this migration as a
+-- literal (and should not be — a hardcoded uid in a versioned file is
+-- exactly the kind of placeholder that ships unmodified into a template
+-- and either grants access to the wrong account or, worse, to no
+-- account, silently locking the operator out with no visible error).
+-- Instead:
 --
 --   1. This migration creates an empty `app_admin` allow-list table (at
 --      most one meaningful row, enforced by convention not a CHECK, since
@@ -33,14 +34,22 @@
 --      trigger and this is a single-operator system where a stray second
 --      row is nobody's realistic failure mode) and an `is_operator()``
 --      helper that every policy calls.
---   2. Deploy the dashboard (Task 2) and sign in once via the chosen auth
---      method. This creates a real row in auth.users with a real uid.
---   3. Look up that uid — Supabase Studio's Authentication > Users page
+--   2. Create the operator account *before* ever visiting the dashboard's
+--      /login page: in Supabase Studio, Authentication > Users > Add
+--      user, setting an email and password directly (skip "send an
+--      invite/magic link"), or via the Admin API's `createUser` method.
+--      This is what puts a real row in auth.users with a real uid — the
+--      dashboard's /login form calls `signInWithPassword()`, which
+--      (unlike a magic link) never creates an account as a side effect,
+--      and there is no sign-up UI to do that for you.
+--   3. Deploy the dashboard (Task 2) and sign in with that email and
+--      password at /login.
+--   4. Look up that uid — Supabase Studio's Authentication > Users page
 --      shows it next to the email, or query it directly:
 --
 --        select id, email from auth.users where email = 'YOUR_EMAIL_HERE';
 --
---   4. Insert it into the allow-list, once, via the SQL editor or `psql`
+--   5. Insert it into the allow-list, once, via the SQL editor or `psql`
 --      (never via a table the dashboard itself can write, since a
 --      self-service allow-list defeats the whole point):
 --
@@ -48,11 +57,10 @@
 --        select id from auth.users where email = 'YOUR_EMAIL_HERE'
 --        on conflict (user_id) do nothing;
 --
--- Until step 4 runs, is_operator() returns false for every uid, including
--- the operator's own freshly-created one — fail-closed by construction,
--- not fail-open. This is also how a compromised or rotated auth account
--- gets re-pointed later: delete the old row, insert the new uid, no
--- migration required.
+-- Until step 5 runs, is_operator() returns false for every uid, including
+-- the operator's own — fail-closed by construction, not fail-open. This
+-- is also how a compromised or rotated auth account gets re-pointed
+-- later: delete the old row, insert the new uid, no migration required.
 --
 -- ============ WHY is_operator() IS security definer (THE ONE DEVIATION
 -- FROM THIS PROJECT'S security invoker RULE) ============
@@ -168,7 +176,8 @@ create policy "operator reads hsbc_ega_months" on hsbc_ega_months
 -- view itself (already included above) plus the underlying table's RLS.
 
 -- ============ WRITE SURFACE — budgets: full CRUD ============
--- Budgets are planned interactively in the dashboard (§10 AMENDMENT):
+-- Budgets are planned interactively in the dashboard (docs/architecture.md
+-- §9, "Manual entry and the dashboard as an input surface"):
 -- no other insertion path exists, the table is currently empty, and the
 -- operator needs to create, revise and delete caps by category/period.
 
@@ -183,7 +192,7 @@ create policy "operator manages budgets" on budgets
   with check (is_operator());
 
 -- ============ WRITE SURFACE — transactions: INSERT + manual-only UPDATE/DELETE ============
--- §10 AMENDMENT: manual entry for non-card spend (cash, bank transfer,
+-- docs/architecture.md §9: manual entry for non-card spend (cash, bank transfer,
 -- GIRO) is the second reason the dashboard accepts input. Bank-sourced
 -- history (source in ('alert','statement')) must stay immutable from the
 -- browser — a bug or a hostile session must never rewrite ingested data,

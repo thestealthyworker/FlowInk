@@ -35,8 +35,9 @@ export function buildLabelIdToMethod(
 
 /**
  * Gmail query OR-clause built from every configured method's alert_label —
- * same shape as the old LABEL_TO_METHOD-keyed clause (§7's nested-label
- * trap: `label:Parent` does not match sub-labels, so this must enumerate
+ * same shape as the old LABEL_TO_METHOD-keyed clause (see docs/architecture.md
+ * §5, "Routing is data, not code", for the nested-label trap:
+ * `label:Parent` does not match sub-labels, so this must enumerate
  * every leaf label explicitly), now driven by the fetched rows so a newly
  * configured label is picked up without a code change or redeploy.
  * A method with no alert_label configured is skipped, same as
@@ -51,8 +52,11 @@ export function buildLabelClause(methods: RoutablePaymentMethod[]): string {
 }
 
 /**
- * §4 trap 3 / item 3: the anti-spoofing sender-domain check. The label
- * identifies the issuer; it does not prove who actually sent the mail — a
+ * The anti-spoofing sender-domain check (see docs/architecture.md §5,
+ * "Routing is data, not code", and §10, security model — the old build
+ * spec's "trap 3 / item 3" this used to cite does not survive under that
+ * number in docs/reference-example-sg.md's current parser-traps list).
+ * The label identifies the issuer; it does not prove who actually sent the mail — a
  * Gmail filter can be spoofed by anyone who gets a lookalike domain past
  * the recipient's own rules. This is the authoritative check.
  *

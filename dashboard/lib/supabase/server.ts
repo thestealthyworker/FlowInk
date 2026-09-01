@@ -24,10 +24,10 @@ export async function createClient() {
           // Called from a Server Component that can't set cookies (no
           // response to attach them to). Safe to ignore here because
           // middleware.ts refreshes the session on every request that
-          // matters for auth state — see docs/cardledger-build-spec.md
-          // §10: "the middleware redirect is UX, not security", but
-          // session refresh still needs to happen somewhere, and
-          // middleware is the somewhere.
+          // matters for auth state — see docs/architecture.md §10
+          // ("Security model"): the middleware redirect is UX, not
+          // security, but session refresh still needs to happen
+          // somewhere, and middleware is the somewhere.
         }
       },
     },

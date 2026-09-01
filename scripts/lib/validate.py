@@ -1,7 +1,8 @@
 """Validation contract for extracted statement transaction rows.
 
-docs/cardledger-build-spec.md §8 defines the validation contract for the
-alert parser (JOB-1); the statement branch (JOB-2, ingest_statements.py)
+docs/architecture.md §5 ("Parser contract" subsection) defines the
+validation contract for the alert parser (JOB-1); the statement branch
+(JOB-2, ingest_statements.py)
 previously applied none of it — it only checked field falsiness, so a
 negative amount (truthy in Python) inserted cleanly and subtracted from
 spend. This module applies the same spirit of contract to statement rows:

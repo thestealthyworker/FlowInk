@@ -1,9 +1,14 @@
 // WP2 (design/ingestion-routing.md): explicit, named regression tests for
 // the anti-spoofing sender-domain check now that it is array-membership
 // against a DB-sourced `payment_methods.alert_senders` instead of a
-// hardcoded single-domain `===`. Build spec §4 trap 3: "a wrong
-// transaction is worse than a missing one" — these are not incidental
-// coverage, they are the specific cases the task brief calls out.
+// hardcoded single-domain `===`. See docs/architecture.md §5 ("Routing is
+// data, not code" for the routing mechanism itself; "Never insert an
+// unvalidated row" for the "a wrong transaction is worse than a missing
+// one" principle this file's build spec citation used to attribute to a
+// "trap 3" that no longer exists under that number in
+// docs/reference-example-sg.md's current parser-traps list) — these are
+// not incidental coverage, they are the specific cases the task brief
+// calls out.
 //
 // Run: deno test --allow-env supabase/functions/_shared/routing_test.ts
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
@@ -32,9 +37,10 @@ Deno.test("senderDomainIsTrusted: undefined alert_senders rejects (fails closed,
 });
 
 Deno.test("senderDomainIsTrusted: rejects the lookalike-subdomain attack (uobgroup.com.attacker.io does not match a configured uobgroup.com)", () => {
-  // The exact attack build spec §4 trap 3 describes: attacker.io owns its
-  // own domain and can legitimately pass SPF/DKIM/DMARC for it while using
-  // a subdomain that *contains* the bank's real domain as a substring.
+  // The exact attack this file's routing anti-spoofing check exists for
+  // (docs/architecture.md §5, "Routing is data, not code"): attacker.io
+  // owns its own domain and can legitimately pass SPF/DKIM/DMARC for it
+  // while using a subdomain that *contains* the bank's real domain as a substring.
   // Naive substring/endsWith matching would pass this; exact array
   // membership must not.
   assertEquals(

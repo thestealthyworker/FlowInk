@@ -1,10 +1,13 @@
 """Pure logic tests for the exact-domain sender allowlist, no network.
 
-docs/cardledger-build-spec.md §4 trap 3 / §11: routing by substring (e.g.
-``"uobgroup.com" in sender``) lets an attacker who owns attacker.io send
-from statements@uobgroup.com.attacker.io, pass SPF/DKIM/DMARC for their
-own domain, and be routed to a real card. The critical regression test
-here is that exact rejection.
+See docs/architecture.md §5 ("Routing is data, not code") and §10
+(security model). The old build spec's "trap 3" this used to cite does
+not survive under that number in docs/reference-example-sg.md's current
+parser-traps list, so the rationale is spelled out here directly: routing
+by substring (e.g. ``"uobgroup.com" in sender``) lets an attacker who owns
+attacker.io send from statements@uobgroup.com.attacker.io, pass
+SPF/DKIM/DMARC for their own domain, and be routed to a real card. The
+critical regression test here is that exact rejection.
 
 Run: pytest tests/test_senders.py -v
 """
