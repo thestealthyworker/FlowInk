@@ -40,13 +40,25 @@ paylah          DBS PayLah!        DBS     wallet        calendar     (null)    
 citi_cashback   Citi Cash Back     Citi    credit_card   statement    cashback     true (staged)
 ```
 
-See `supabase/migrations/0002_seed.sql` for the exact `INSERT`
-statements and `supabase/migrations/0015_generic_rules_engine.sql`'s
-backfill section for how each card's rows were annotated with the
-generic evaluator's newer columns (`cap_basis`, `reward_form`,
-`gate_scope`, `condition_key`, `credit_block_size`/`credit_floor`,
-`reward_unit`) — those two files together are the authoritative current
-source, more current than any SQL reproduced in this document.
+This data no longer ships as a migration that runs automatically —
+`supabase/migrations/0002_seed.sql` is now an intentional no-op (its
+header explains why). The exact rows live in the
+`load_example_data_singapore()` function, defined in
+`supabase/migrations/0018_config_review.sql`, together with
+`supabase/migrations/0015_generic_rules_engine.sql`'s backfill section for
+how each card's rows were annotated with the generic evaluator's newer
+columns (`cap_basis`, `reward_form`, `gate_scope`, `condition_key`,
+`credit_block_size`/`credit_floor`, `reward_unit`) — those two files
+together are the authoritative current source, more current than any SQL
+reproduced in this document.
+
+**To actually load this example data into your own deployment**, don't
+run any SQL by hand: go to `/config` in the dashboard and click **"Load
+the Singapore example"** (visible whenever no cards are configured yet —
+see `dashboard/components/config/ExampleDataControls.tsx`). That calls
+`load_example_data_singapore()` for you. A "Clear example data" button
+appears in its place once the example is loaded, and removes only these
+example rows — never anything you've added or edited yourself.
 
 `citi_cashback` is **staged**, not omitted: its `payment_methods` row
 exists with `active = false`, `last4 = null`, and its `method_rules` rows
@@ -308,9 +320,11 @@ report" as its citation trail; that report was produced in a chat
 session while building this project and was never a file committed to
 this repo — it is not recoverable from this checkout, and this document
 does not pretend otherwise. What you're reading here is the *outcome* of
-that research as it's encoded in the schema (`supabase/migrations/
-0002_seed.sql`, annotated further by `0015_generic_rules_engine.sql`),
-not a re-derivation of it, and not a live citation trail. Given how often
+that research as it's encoded in the schema
+(`load_example_data_singapore()` in `supabase/migrations/
+0018_config_review.sql`, annotated further by
+`0015_generic_rules_engine.sql`), not a re-derivation of it, and not a
+live citation trail. Given how often
 card terms change, treat any specific rate above as a starting point to
 verify against the issuer's current T&C directly, not a citation to
 trust indefinitely.

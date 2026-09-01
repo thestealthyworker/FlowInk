@@ -1,7 +1,7 @@
-# FlowInk Supabase project config. See docs/cardledger-build-spec.md §7
-# and §12 item 9 (pg_cron -> Edge Function auth) and §11 (security).
+# FlowInk Supabase project config. See docs/architecture.md §7 (jobs,
+# pg_cron -> Edge Function auth) and §10 (security model).
 #
-# Telegram was removed 2026-08-25 (operator decision, §10 AMENDMENT):
+# Telegram was removed 2026-08-25 (operator decision):
 # warnings and merchant triage move to the web dashboard (Phase 5, not yet
 # built). That deleted telegram-webhook, merchant-triage, and nudge — the
 # only public unauthenticated endpoint in the system went with

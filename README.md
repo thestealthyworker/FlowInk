@@ -109,6 +109,33 @@ tests/                        parser + merchant + period regression tests, fixtu
 docs/                         architecture, the Singapore worked example, and setup guides
 ```
 
+## Running the tests
+
+The Python parser/merchant/period/reconcile regression suite lives in
+`tests/`, and doesn't need any live Supabase project, Gmail account, or
+API key to run:
+
+```
+pip install -r tests/requirements.txt -r scripts/requirements.txt
+python3 -m pytest
+```
+
+Use `python3 -m pytest`, not a bare `pytest` — depending on how Python is
+installed on your machine, a bare `pytest` on PATH may resolve to a
+different (isolated) install that can't see packages from the command
+above. As of this checkout, the expected result is:
+
+```
+206 passed, 3 skipped
+```
+
+The 3 skips are correct, not a partial failure: those tests exercise the
+live Anthropic parsing path and skip themselves when `ANTHROPIC_API_KEY`
+isn't set in your environment, which it won't be for a plain clone. If
+you do have `ANTHROPIC_API_KEY` exported when you run this, those 3 tests
+run for real instead (and make live API calls) — expect `209 passed`, not
+206, in that case.
+
 ## Secrets — four runtimes, four stores
 
 Each runtime reads only its own secret store; never unify them. The full

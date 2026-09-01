@@ -79,10 +79,20 @@ Later steps depend on earlier ones existing, so follow this order:
 
 ## After infrastructure exists
 
-Once you've worked through the required steps (and any optional ones you
-want), the remaining setup — routing bank alerts to the right rules,
-tuning card thresholds, anything specific to *your* cards rather than to
-the infrastructure — is covered separately. That guide isn't part of this
+Once you've worked through the required steps (Supabase + Vercel), a
+fresh deployment's card configuration is genuinely empty — no cards, no
+rules — by design, not a bug. Before encoding your own cards, it's worth
+seeing the pattern working end to end first: go to `/config` in the
+dashboard and click **"Load the Singapore example"** to populate three
+real cards with real published rates (see
+[`docs/reference-example-sg.md`](reference-example-sg.md) for what it
+loads and why). A **"Clear example data"** button in the same place
+removes only that example data later, whenever you're ready to configure
+your own cards instead.
+
+The remaining setup — routing bank alerts to the right rules, tuning card
+thresholds, anything specific to *your* cards rather than to the
+infrastructure — is covered separately. That guide isn't part of this
 document set; if it isn't in `docs/` yet in your checkout, it's still in
 progress upstream.
 
