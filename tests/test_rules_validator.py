@@ -36,6 +36,8 @@ from lib.rules_validator import (  # noqa: E402
     ExistingData,
     Issue,
     ValidationReport,
+    _looks_like_real_citation,
+    _PLACEHOLDER_HOSTS,
     confidence_issues,
     format_report,
     has_real_citation,
@@ -681,3 +683,230 @@ class TestReportFormatting:
         text = format_report(report)
         assert "REJECTED" in text
         assert "80.0%" in text
+
+
+# ============ WP7 QA REVIEW REGRESSION TESTS ============
+# One class per finding (Fix 1-4). Each test is written to FAIL against
+# the pre-fix code and PASS against the fixed code — see this WP's report
+# for the before/after run of each.
+
+class TestFix2CitationHostParsing:
+    """QA: `parsed.netloc.lower().split(":')[0]` returns the USERNAME,
+    not the host, when the URL carries embedded credentials — every
+    _PLACEHOLDER_HOSTS entry was bypassable by prefixing `x:y@`. Before
+    the fix: `_looks_like_real_citation({'url': 'https://x:y@example.com/tnc'})`
+    was True (bypassed) while the un-credentialed form was correctly
+    False. After the fix (`urlparse(...).hostname`): both False, and
+    credentialed URLs are rejected outright regardless of host."""
+
+    def test_credentials_prefix_no_longer_bypasses_any_placeholder_host(self):
+        for host in _PLACEHOLDER_HOSTS:
+            plain = _looks_like_real_citation({"url": f"https://{host}/tnc"})
+            credentialed = _looks_like_real_citation({"url": f"https://x:y@{host}/tnc"})
+            assert plain is False, f"{host} should already be a placeholder"
+            assert credentialed is False, (
+                f"https://x:y@{host}/tnc bypassed the placeholder-host check via embedded "
+                "credentials — this is the exact QA-reproduced bug"
+            )
+
+    def test_embedded_credentials_rejected_even_on_a_genuinely_real_host(self):
+        """Citations to public T&C pages never need userinfo — reject the
+        shape outright rather than trying to parse safely around it."""
+        assert _looks_like_real_citation({"url": "https://x:y@www.uob.com.sg/one-card-tnc"}) is False
+
+    def test_trailing_root_zone_dot_still_recognized_as_placeholder(self):
+        assert _looks_like_real_citation({"url": "https://example.com./one-card-tnc"}) is False
+
+    def test_bare_ipv4_host_rejected(self):
+        assert _looks_like_real_citation({"url": "http://93.184.216.34/one-card-tnc"}) is False
+
+    def test_bare_ipv6_host_rejected(self):
+        assert _looks_like_real_citation({"url": "http://[2606:2800:220:1:248:1893:25c8:1946]/tnc"}) is False
+
+    def test_genuine_https_url_to_a_real_host_still_passes(self):
+        assert _looks_like_real_citation({"url": "https://www.uob.com.sg/one-card-tnc"}) is True
+
+
+class TestFix1PaymentMethodSensitiveFieldProtection:
+    """QA reproduced a silent full overwrite of an EXISTING uob_one row
+    via run_validator()'s old best-effort payment_methods write:
+    alert_senders gained an attacker-controlled domain and last4 changed,
+    with zero issues raised. Fix: a change to alert_senders/
+    statement_senders/last4 on an EXISTING method now blocks that row's
+    entire write and is surfaced as a reject issue + a per-field diff in
+    format_report(); a brand-new method or a non-sensitive-field change
+    on an existing one is unaffected."""
+
+    def test_sensitive_field_change_on_existing_method_is_blocked_not_written(self):
+        existing_pm = uob_one_pm()
+        attacker_pm = uob_one_pm(
+            alert_senders=["uobgroup-com.attacker-controlled.io"],
+            last4="9999",
+        )
+        config = {"payment_methods": [attacker_pm], "rules": []}
+        client = FakeRulesEngineClient(existing_payment_methods={"uob_one": existing_pm})
+        report = run_validator(config, client)
+
+        assert client.pm_writes == []  # the whole row was never written — no partial write either
+        assert len(report.payment_method_outcomes) == 1
+        outcome = report.payment_method_outcomes[0]
+        assert outcome.written is False
+        assert outcome.is_new is False
+        assert set(outcome.blocked_fields) == {"alert_senders", "last4"}
+        assert any(iss.is_reject() for iss in report.payment_method_issues)
+        msgs = " ".join(i.message for i in report.payment_method_issues)
+        assert "attacker-controlled.io" in msgs or "9999" in msgs
+        assert "/config" in msgs
+
+    def test_report_shows_per_field_diff_not_a_bare_count(self):
+        existing_pm = uob_one_pm()
+        attacker_pm = uob_one_pm(alert_senders=["uobgroup-com.attacker-controlled.io"])
+        config = {"payment_methods": [attacker_pm], "rules": []}
+        client = FakeRulesEngineClient(existing_payment_methods={"uob_one": existing_pm})
+        report = run_validator(config, client)
+        text = format_report(report)
+        assert "payment_methods written: " not in text  # the old bare-count line is gone
+        assert "BLOCKED" in text
+        assert "alert_senders" in text
+        assert "uobgroup-com.attacker-controlled.io" in text  # the actual new value, visible in-line
+
+    def test_statement_senders_change_on_existing_method_is_also_blocked(self):
+        existing_pm = uob_one_pm()
+        modified_pm = uob_one_pm(statement_senders=["evil.example"])
+        config = {"payment_methods": [modified_pm], "rules": []}
+        client = FakeRulesEngineClient(existing_payment_methods={"uob_one": existing_pm})
+        report = run_validator(config, client)
+        assert client.pm_writes == []
+        assert "statement_senders" in report.payment_method_outcomes[0].blocked_fields
+
+    def test_non_sensitive_field_change_on_existing_method_is_written(self):
+        existing_pm = uob_one_pm()
+        renamed_pm = uob_one_pm(display_name="UOB One (renamed)")
+        config = {"payment_methods": [renamed_pm], "rules": []}
+        client = FakeRulesEngineClient(existing_payment_methods={"uob_one": existing_pm})
+        report = run_validator(config, client)
+        assert len(client.pm_writes) == 1
+        outcome = report.payment_method_outcomes[0]
+        assert outcome.written is True
+        assert outcome.blocked_fields == {}
+        assert "display_name" in outcome.diff
+
+    def test_brand_new_method_is_written_straight_through_unaffected(self):
+        config = {"payment_methods": [hsbc_revo_pm()], "rules": []}
+        client = FakeRulesEngineClient()  # nothing recorded yet
+        report = run_validator(config, client)
+        assert len(client.pm_writes) == 1
+        outcome = report.payment_method_outcomes[0]
+        assert outcome.is_new is True
+        assert outcome.written is True
+
+
+class TestFix3ExistingRewardTypeWins:
+    """QA reproduced an existing cashback card resubmitted with
+    reward_type='miles' and rate=8 passing every stage with zero issues
+    — the batch's own claim overrode the DB-recorded value, so the
+    plausibility check ran against the wrong unit. Fix: for an EXISTING
+    method the DB-recorded reward_type always governs the plausibility
+    check, and a batch claiming a different value is itself surfaced as
+    a reject issue."""
+
+    def test_relabelled_reward_type_is_itself_rejected_and_recorded_value_governs_rate_check(self):
+        existing_pm = uob_one_pm()  # reward_type='cashback' on record
+        relabelled_pm = uob_one_pm(reward_type="miles")
+        config = {
+            "payment_methods": [relabelled_pm],
+            # rate=8 is implausible for cashback (800%) but plausible for miles —
+            # exactly the QA-reproduced case.
+            "rules": [category_rate_rule(rate=8)],
+        }
+        client = FakeRulesEngineClient(existing_payment_methods={"uob_one": existing_pm})
+        report = run_validator(config, client)
+
+        pm_msgs = " ".join(i.message for i in report.payment_method_issues)
+        assert "reward_type" in pm_msgs and "cashback" in pm_msgs and "miles" in pm_msgs
+
+        # The rule itself must still be judged against the RECORDED
+        # ('cashback') reward_type, not the batch's relabelled claim —
+        # rate=8 must be rejected, and nothing reaches the database.
+        assert len(report.rejected_rules) == 1
+        assert client.submitted == []
+
+    def test_brand_new_method_has_nothing_to_override_batch_value_is_used(self):
+        """No recorded value exists yet — the batch's own reward_type is
+        all there is, and this case is unaffected by the fix."""
+        config = {"payment_methods": [hsbc_revo_pm(reward_type="miles")],
+                  "rules": [category_rate_rule(method_id="hsbc_revo", rate=8.0)]}
+        client = FakeRulesEngineClient()  # nothing recorded yet
+        report = run_validator(config, client)
+        assert len(report.accepted_rules) == 1
+        assert not report.payment_method_issues
+
+
+class TestFix4TxnMinZeroCapBasisFlipMethodIdCharset:
+    """QA: txn_min=0 is accepted today at every stage including the DB
+    trigger (which only rejects < 0), but evaluate_period() treats a
+    null txn_min identically via coalesce(txn_min, 0) — 0 is a
+    degenerate always-cleared gate. Also: a cap_basis flip
+    ('reward'<->'spend') on the same cap slot carries the same number
+    but a wildly different meaning, and was silent. Also: method_id had
+    no charset check, unlike domain fields."""
+
+    def test_txn_min_zero_rejected_as_degenerate_gate(self):
+        config = {"payment_methods": [uob_one_pm()], "rules": [tier_rule(txn_min=0)]}
+        issues = schema_issues(config)
+        assert any(i.is_reject() and "txn_min" in i.message and "0" in i.message for i in issues)
+
+    def test_txn_min_positive_still_fine(self):
+        config = {"payment_methods": [uob_one_pm()], "rules": [tier_rule(txn_min=10)]}
+        issues = schema_issues(config)
+        assert not any(i.is_reject() and "txn_min" in i.message for i in issues)
+
+    def test_txn_min_null_still_fine(self):
+        config = {"payment_methods": [uob_one_pm()], "rules": [tier_rule(txn_min=None)]}
+        issues = schema_issues(config)
+        assert not any(i.is_reject() and "txn_min" in i.message for i in issues)
+
+    def test_cap_basis_flip_from_reward_to_spend_warns_not_rejects(self):
+        rule = cap_rule(cap_basis="spend")
+        issues = semantic_issues(rule, 0, reward_type="cashback", existing_cap_basis="reward")
+        assert len(issues) == 1
+        assert not issues[0].is_reject()
+        assert "cap_basis" in issues[0].message
+        assert "reward" in issues[0].message and "spend" in issues[0].message
+
+    def test_cap_basis_unchanged_from_existing_no_warning(self):
+        rule = cap_rule(cap_basis="reward")
+        assert semantic_issues(rule, 0, reward_type="cashback", existing_cap_basis="reward") == []
+
+    def test_cap_basis_with_no_matching_existing_row_no_warning(self):
+        rule = cap_rule(cap_basis="spend")
+        assert semantic_issues(rule, 0, reward_type="cashback", existing_cap_basis=None) == []
+
+    def test_cap_basis_flip_surfaced_through_run_validator_as_a_warn_that_still_lands_pending_review(self):
+        existing_rules = {"uob_one": [{
+            "id": 1, "method_id": "uob_one", "rule_type": "cap", "categories": None,
+            "condition_key": None, "cap_basis": "reward",
+            "valid_from": "2024-01-01", "valid_to": "2025-06-30",
+        }]}
+        new_rule = cap_rule(cap_basis="spend", valid_from="2025-07-01", valid_to=None)
+        config = {"payment_methods": [uob_one_pm()], "rules": [new_rule]}
+        client = FakeRulesEngineClient(
+            existing_payment_methods={"uob_one": uob_one_pm()}, existing_rules=existing_rules,
+        )
+        report = run_validator(config, client)
+        assert len(report.accepted_rules) == 1  # a warn never blocks
+        warn_msgs = " ".join(i.message for i in report.accepted_rules[0].issues)
+        assert "cap_basis" in warn_msgs
+
+    def test_cyrillic_lookalike_method_id_rejected(self):
+        # 'о' in "uоb_one" is U+043E CYRILLIC SMALL LETTER O, not ASCII 'o'
+        pm = uob_one_pm(id="uоb_one")
+        config = {"payment_methods": [pm], "rules": []}
+        issues = schema_issues(config)
+        assert any(i.is_reject() and "ascii" in i.message.lower() for i in issues)
+
+    def test_valid_snake_case_method_id_unaffected(self):
+        pm = uob_one_pm(id="uob_one_2")
+        config = {"payment_methods": [pm], "rules": []}
+        issues = schema_issues(config)
+        assert not any(i.is_reject() for i in issues if i.method_index == 0)

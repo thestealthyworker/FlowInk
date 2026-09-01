@@ -102,6 +102,7 @@ here ever drops a rule with no explanation, and nothing here silently
 """
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -142,6 +143,16 @@ REWARD_TYPE_VALUES: frozenset[str] = frozenset({"cashback", "miles"})
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _LAST4_RE = re.compile(r"^\d{4}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# payment_methods[].id charset (Fix 4 of the WP7 QA review): plain ASCII
+# lowercase snake_case, matching every id already in production use
+# (uob_one, citi_cashback, hsbc_revo, paylah) and docs/onboarding-spec.md
+# §3's own "lowercase, snake_case, stable" description. Domain fields
+# already get an ASCII-only charset check (is_valid_domain_syntax, see
+# senders.py) precisely so a Cyrillic lookalike can never compare equal
+# to a real domain; method_id previously had no such check at all — a
+# mixed-script lookalike id would create a confusingly duplicate-looking
+# payment method rather than actually matching an existing row.
+_METHOD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # Fields a rule_type genuinely reads, per evaluate_period()
 # (0015_generic_rules_engine.sql) — see that function's own per-type
@@ -185,6 +196,18 @@ _PLACEHOLDER_HOSTS = frozenset({
 })
 
 
+def _is_bare_ip_host(host: str) -> bool:
+    """True if ``host`` is a raw IPv4/IPv6 literal rather than a DNS name.
+    A real issuer's own T&C page is never cited by IP address — this is a
+    plausibility signal, same spirit as the placeholder-host list."""
+    candidate = host[1:-1] if host.startswith("[") and host.endswith("]") else host
+    try:
+        ipaddress.ip_address(candidate)
+        return True
+    except ValueError:
+        return False
+
+
 def _looks_like_real_citation(citation: dict) -> bool:
     """A citation counts only if it carries a URL that could plausibly be
     dereferenced — never a bare title ("UOB's website"), never a known
@@ -192,6 +215,18 @@ def _looks_like_real_citation(citation: dict) -> bool:
     URL is live or says what the rule claims — see
     docs/onboarding-spec.md §2/§5 for what standard the AI is asked to
     hold itself to; this function only catches what a machine can catch.
+    Nothing here ever dereferences the URL.
+
+    Host extraction uses ``urlparse(...).hostname``, never a hand-rolled
+    split on ``netloc``. QA found that the previous
+    ``parsed.netloc.lower().split(":")[0]`` returns the *username* when
+    the URL carries embedded credentials (``netloc`` is
+    ``user:pass@host[:port]``) — ``https://x:y@example.com/tnc`` parsed to
+    host ``"x"``, silently bypassing every entry in ``_PLACEHOLDER_HOSTS``
+    (`_looks_like_real_citation({'url': 'https://example.com/tnc'})` is
+    `False`, but the credentialed variant of the same host was `True`).
+    ``.hostname`` is already lowercased and strips both userinfo and port,
+    closing that whole class of bug rather than special-casing the ``@``.
     """
     url = citation.get("url") if isinstance(citation, dict) else None
     if not isinstance(url, str) or len(url) < 15:
@@ -202,8 +237,23 @@ def _looks_like_real_citation(citation: dict) -> bool:
         return False
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return False
-    host = parsed.netloc.lower().split(":")[0]
+    # A legitimate citation to a bank's own PUBLISHED terms never needs
+    # embedded credentials — their presence is itself a signal something
+    # is wrong (at best pointless, at worst exactly the ``user:pass@host``
+    # shape that defeated the old host-parsing logic above). Reject
+    # outright rather than trying to parse safely around it.
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    try:
+        host = parsed.hostname  # already lowercased; userinfo/port stripped
+    except ValueError:
+        return False
+    if not host:
+        return False
+    host = host.rstrip(".")  # a trailing root-zone dot is not a distinct host
     if host in _PLACEHOLDER_HOSTS:
+        return False
+    if _is_bare_ip_host(host):
         return False
     return True
 
@@ -219,7 +269,7 @@ def has_real_citation(rule: dict) -> bool:
 
 @dataclass
 class Issue:
-    stage: str            # 'schema' | 'referential' | 'confidence' | 'semantic' | 'dry_run'
+    stage: str            # 'schema' | 'referential' | 'confidence' | 'semantic' | 'dry_run' | 'payment_method'
     severity: str         # 'reject' | 'warn'
     message: str
     rule_index: int | None = None       # index into config['rules'], or None
@@ -246,9 +296,30 @@ class RuleOutcome:
 
 
 @dataclass
+class PaymentMethodOutcome:
+    """Per-`payment_methods[]`-entry outcome (Fix 1 of the WP7 QA
+    review): what changed on an EXISTING method, whether it was written,
+    and — when it was not — exactly which fields blocked it. `diff` is
+    populated for any existing-method row that differs from the stored
+    one in any field the operator would care to see (a superset of
+    `blocked_fields`, which is the subset that is actually
+    alert_senders/statement_senders/last4 and therefore refused). A
+    brand-new method (`is_new=True`) has nothing to diff against — it is
+    written straight through once schema-valid, same as before this
+    fix."""
+    index: int                          # index into config['payment_methods']
+    id: str | None
+    is_new: bool
+    written: bool
+    diff: dict[str, tuple[Any, Any]] = field(default_factory=dict)           # field -> (old, new)
+    blocked_fields: dict[str, tuple[Any, Any]] = field(default_factory=dict)  # subset of `diff` that blocked the write
+
+
+@dataclass
 class ValidationReport:
     payment_method_issues: list[Issue] = field(default_factory=list)
     payment_methods_written: list[dict] = field(default_factory=list)
+    payment_method_outcomes: list[PaymentMethodOutcome] = field(default_factory=list)
     rule_outcomes: list[RuleOutcome] = field(default_factory=list)
 
     @property
@@ -346,6 +417,23 @@ def _pm_schema_issues(pm: dict, idx: int) -> list[Issue]:
     mid = pm.get("id")
     if not isinstance(mid, str) or not mid:
         reject("payment_methods[].id is required and must be a non-empty string.")
+    elif not _METHOD_ID_RE.match(mid):
+        # Every existing id (uob_one, citi_cashback, hsbc_revo, paylah) is
+        # plain ASCII lowercase snake_case — the spec itself says so (§3:
+        # "lowercase, snake_case, stable"). Domain fields already get a
+        # charset check (is_valid_domain_syntax, ASCII-only by design —
+        # see senders.py's own comment on why a Cyrillic lookalike must
+        # never compare equal to a real domain); method_id had none. A
+        # Cyrillic- or other-script lookalike id (e.g. an 'о' that isn't
+        # 'o') would create a payment_methods row that LOOKS like an
+        # existing card in a listing but is_valid a distinct row —
+        # confusingly duplicate, not caught by the (id, ...) primary key.
+        reject(f"payment_methods[{idx}].id={mid!r} must be plain ASCII lowercase snake_case "
+               "(letters, digits, underscore, starting with a letter) — matching every id already "
+               "in use (uob_one, citi_cashback, hsbc_revo, paylah). A non-ASCII or mixed-script "
+               "character here (e.g. a Cyrillic lookalike of a Latin letter) would create a "
+               "confusingly duplicate-looking payment method rather than actually matching an "
+               "existing one.")
     for field_name in ("display_name", "issuer"):
         if not isinstance(pm.get(field_name), str) or not pm.get(field_name):
             reject(f"payment_methods[{idx}].{field_name} is required and must be a non-empty string.")
@@ -446,6 +534,19 @@ def _rule_schema_issues(rule: dict, idx: int) -> list[Issue]:
     txn_min = rule.get("txn_min")
     if txn_min is not None and not (isinstance(txn_min, int) and not isinstance(txn_min, bool)):
         reject(f"rules[{idx}].txn_min must be an integer, or null. Got {txn_min!r}.")
+    elif txn_min == 0:
+        # Fix 4 of the WP7 QA review: evaluate_period() reads
+        # coalesce(txn_min, 0) everywhere (0007_rules_engine.sql,
+        # 0015_generic_rules_engine.sql) — txn_min=0 is therefore
+        # BEHAVIOURALLY IDENTICAL to leaving it null, i.e. an
+        # always-cleared gate that only misleadingly implies a
+        # transaction-count requirement exists. The DB trigger
+        # (0018_config_review.sql) only rejects txn_min < 0, so this
+        # value sails through every stage today with no actual effect.
+        reject(f"rules[{idx}].txn_min=0 is a degenerate gate that is ALWAYS cleared — "
+               "evaluate_period() treats a null txn_min identically (coalesce(txn_min, 0)), so 0 adds "
+               "no real requirement while looking like one. Use null for 'no transaction-count "
+               "requirement', or a positive integer for a real one.")
 
     priority = rule.get("priority", 0)
     if priority is not None and not (isinstance(priority, int) and not isinstance(priority, bool)):
@@ -732,7 +833,30 @@ def confidence_issues(rule: dict, idx: int) -> list[Issue]:
 
 # ============ STAGE 4a: SEMANTIC PLAUSIBILITY ============
 
-def semantic_issues(rule: dict, idx: int, *, reward_type: str | None) -> list[Issue]:
+def _matching_existing_cap_basis(rule: dict, existing_rows: list[dict]) -> str | None:
+    """The recorded cap_basis of the existing 'cap' row that shares this
+    proposed cap row's identity (Fix 4 of the WP7 QA review) — same
+    method's rows, same categories, same condition_key identify "the same
+    cap slot" even across a window change; window overlap is deliberately
+    NOT required here (unlike referential_issues' conflict check), since
+    a cap_basis flip is worth flagging whether or not the two rows would
+    also collide. Returns None when nothing matches — a genuinely new cap
+    slot has no prior meaning to flip."""
+    if rule.get("rule_type") != "cap":
+        return None
+    cat_key = _categories_key(rule.get("categories"))
+    cond_key = rule.get("condition_key")
+    for r in existing_rows:
+        if (r.get("rule_type") == "cap"
+                and _categories_key(r.get("categories")) == cat_key
+                and r.get("condition_key") == cond_key
+                and r.get("cap_basis") is not None):
+            return r["cap_basis"]
+    return None
+
+
+def semantic_issues(rule: dict, idx: int, *, reward_type: str | None,
+                     existing_cap_basis: str | None = None) -> list[Issue]:
     issues: list[Issue] = []
     rule_type = rule.get("rule_type")
     rate = rule.get("rate")
@@ -753,6 +877,22 @@ def semantic_issues(rule: dict, idx: int, *, reward_type: str | None) -> list[Is
                 f"rules[{idx}].rate={rate} on a miles card is outside the plausible range "
                 f"(0..{MAX_MILES_RATE} miles/points per currency unit). rate is miles-per-dollar for a "
                 "miles card, not a fraction — see docs/onboarding-spec.md §4.",
+                rule_index=idx,
+            ))
+
+    if rule_type == "cap":
+        cap_basis = rule.get("cap_basis")
+        if (existing_cap_basis is not None and cap_basis is not None
+                and cap_basis != existing_cap_basis):
+            issues.append(Issue(
+                "semantic", "warn",
+                f"rules[{idx}] is a 'cap' row whose method/categories/condition_key matches an "
+                f"already-recorded cap row, but claims cap_basis={cap_basis!r} where the recorded row "
+                f"has cap_basis={existing_cap_basis!r}. 'spend' and 'reward' cap_basis share the exact "
+                "same cap_amount NUMBER but evaluate_period() treats them completely differently — "
+                "this looks like the number was carried over while its meaning was silently flipped. "
+                "Confirm this is intentional; if it isn't, the cap_amount likely needs to change too, "
+                "not just cap_basis.",
                 rule_index=idx,
             ))
 
@@ -868,22 +1008,140 @@ def run_validator(config: dict, client: RulesEngineClient, *, submit: bool = Tru
             else:
                 warn_by_rule.setdefault(i.rule_index, []).append(i)
 
-    # Reward type per method_id, for stage 4a's rate-unit plausibility
-    # check — from the batch's own payment_methods[] first (a brand-new
-    # card), falling back to the already-deployed row.
-    reward_type_by_method: dict[str, str | None] = {}
-    for pm in pms:
-        if isinstance(pm.get("id"), str):
-            reward_type_by_method[pm["id"]] = pm.get("reward_type")
-    for mid, row in existing.payment_methods.items():
-        reward_type_by_method.setdefault(mid, row.get("reward_type"))
+    # ============ payment_methods: diff against the stored row BEFORE
+    # ever writing (Fix 1 + Fix 3 of the WP7 QA review) ============
+    #
+    # A NEW method_id (nothing recorded yet) has nothing to diff against
+    # and nothing to protect — written straight through once schema-valid,
+    # same as always: this really is identity data the user stated
+    # directly (docs/onboarding-spec.md §3).
+    #
+    # An EXISTING method_id is different. Two things a
+    # payment_methods[] row can carry that must never change silently
+    # through this path, ever again:
+    #
+    #   - alert_senders / statement_senders / last4
+    #     (_SENSITIVE_PM_FIELDS below): the anti-spoofing controls
+    #     ingest-alerts/index.ts reads (~95, 382, 524-530) to decide
+    #     whether an email is genuine. QA reproduced a full silent
+    #     overwrite of an EXISTING uob_one row through exactly this path
+    #     — alert_senders gained an attacker-controlled domain, last4
+    #     changed — via SupabaseREST.insert(on_conflict='id',
+    #     resolution=merge-duplicates) under service_role, which bypasses
+    #     RLS. A change to ANY of these three fields on an existing
+    #     method now blocks that entire payment_methods[] row's write —
+    #     never a partial write of "everything except the sensitive
+    #     fields," which would just relocate the silence rather than
+    #     remove it. Direct the operator to /config instead (§6): a human
+    #     sets a routing domain on their own authority, an AI never does.
+    #   - reward_type: governs what `rate` MEANS for every rule this
+    #     method already has (§4 — "the single most dangerous field in
+    #     this schema"). The DB-recorded value, never whatever this batch
+    #     claims, is what stage 4a's plausibility check below actually
+    #     uses — a relabelled reward_type must not be able to walk an
+    #     implausible `rate` straight past the check that exists to catch
+    #     it (QA: an existing cashback card resubmitted as 'miles'
+    #     alongside rate=8 passed with zero issues). A claimed change is
+    #     surfaced as its own explicit issue, not silently believed.
+    #
+    # format_report() renders `payment_method_outcomes` as a per-field
+    # diff for every existing row this batch touches, accepted or
+    # blocked — never a bare count.
+    _SENSITIVE_PM_FIELDS: tuple[str, ...] = ("alert_senders", "statement_senders", "last4")
+    # Every field worth a reviewer's attention when it changes on an
+    # existing row — schema-shape-only fields (id, method_type,
+    # period_type) excluded: id is the join key (a "change" there is a
+    # different row), method_type/period_type changing on a live card is
+    # its own can of worms this validator doesn't attempt to referee.
+    _PM_DIFF_FIELDS: tuple[str, ...] = (
+        "display_name", "issuer", "last4", "cycle_day", "reward_type",
+        "has_rules", "active", "currency", "alert_label", "alert_senders",
+        "statement_senders", "aggregation_window", "aggregation_anchor_date",
+        "reward_unit",
+    )
 
-    # payment_methods write — best-effort, independent of any rule's
-    # fate: identity data the user stated directly, not a reward claim.
-    # See docs/onboarding-spec.md §3's "not gated the way method_rules is"
-    # note.
-    pm_to_write = [pm for i, pm in enumerate(pms)
-                   if not any(iss.is_reject() for iss in s_issues if iss.method_index == i)]
+    def _pm_field_norm(v: Any) -> Any:
+        if isinstance(v, list):
+            return tuple(sorted(str(x).lower() for x in v))
+        if isinstance(v, str):
+            return v.strip().lower()
+        return v
+
+    reward_type_by_method: dict[str, str | None] = {}
+    pm_to_write: list[dict] = []
+    for i, pm in enumerate(pms):
+        mid = pm.get("id")
+        if any(iss.is_reject() for iss in s_issues if iss.method_index == i):
+            # Schema-invalid row: never diffed, never written — the
+            # schema stage's own message already explains why.
+            report.payment_method_outcomes.append(PaymentMethodOutcome(
+                index=i, id=mid if isinstance(mid, str) else None,
+                is_new=isinstance(mid, str) and mid not in existing.payment_methods,
+                written=False,
+            ))
+            continue
+        # Past the schema-reject filter, mid is guaranteed a non-empty
+        # str (schema stage requires it) — assert not needed, just used.
+
+        stored = existing.payment_methods.get(mid)
+        if stored is None:
+            reward_type_by_method[mid] = pm.get("reward_type")
+            pm_to_write.append(pm)
+            report.payment_method_outcomes.append(
+                PaymentMethodOutcome(index=i, id=mid, is_new=True, written=True)
+            )
+            continue
+
+        # Existing method: the DB's own reward_type wins for every
+        # plausibility check below, unconditionally — see this block's
+        # header comment (Fix 3).
+        reward_type_by_method[mid] = stored.get("reward_type")
+        batch_reward_type = pm.get("reward_type")
+        if (batch_reward_type is not None and stored.get("reward_type") is not None
+                and batch_reward_type != stored.get("reward_type")):
+            report.payment_method_issues.append(Issue(
+                "payment_method", "reject",
+                f"payment_methods[{i}] ({mid!r}) claims reward_type={batch_reward_type!r}, but the "
+                f"already-recorded value is {stored.get('reward_type')!r}. rate is meaningless "
+                "without knowing which of these is true (docs/onboarding-spec.md §4) — every "
+                "plausibility check in this run used the RECORDED value for this method's rules, "
+                "not this claim. If the card genuinely changed reward programmes, say so explicitly "
+                "and make the change at /config; this validator will not relabel it silently.",
+                method_index=i,
+            ))
+
+        diff: dict[str, tuple[Any, Any]] = {}
+        for f in _PM_DIFF_FIELDS:
+            if f not in pm:
+                continue  # not part of this submission's claim about the row — nothing to compare
+            new_v, old_v = pm.get(f), stored.get(f)
+            if _pm_field_norm(new_v) != _pm_field_norm(old_v):
+                diff[f] = (old_v, new_v)
+
+        blocked = {f: diff[f] for f in _SENSITIVE_PM_FIELDS if f in diff}
+        if blocked:
+            changed_desc = "; ".join(f"{f}: {old!r} -> {new!r}" for f, (old, new) in blocked.items())
+            report.payment_method_issues.append(Issue(
+                "payment_method", "reject",
+                f"payment_methods[{i}] ({mid!r}) tries to change {changed_desc} on an "
+                "ALREADY-EXISTING method. alert_senders/statement_senders/last4 are this app's "
+                "anti-spoofing controls (ingest-alerts/index.ts reads them to decide whether an "
+                "email is genuine) — a wrong value here silently routes another sender's mail into "
+                "this card's ledger (docs/onboarding-spec.md §6). This ENTIRE payment_methods[] row "
+                "was NOT written (never a partial write of the other fields either). Make this "
+                "specific change at /config, where a human operator sets it on their own authority.",
+                method_index=i,
+            ))
+            report.payment_method_outcomes.append(PaymentMethodOutcome(
+                index=i, id=mid, is_new=False, written=False, diff=diff, blocked_fields=blocked,
+            ))
+            continue
+
+        pm_to_write.append(pm)
+        report.payment_method_outcomes.append(
+            PaymentMethodOutcome(index=i, id=mid, is_new=False, written=True, diff=diff)
+        )
+
     if submit and pm_to_write:
         report.payment_methods_written = client.upsert_payment_methods(pm_to_write)
     elif not submit:
@@ -906,7 +1164,13 @@ def run_validator(config: dict, client: RulesEngineClient, *, submit: bool = Tru
 
         outcome.issues.extend(conf_issues)  # warns, if any (currently none at pass)
 
-        sem_issues = semantic_issues(rule, idx, reward_type=reward_type_by_method.get(rule.get("method_id")))
+        sem_issues = semantic_issues(
+            rule, idx,
+            reward_type=reward_type_by_method.get(rule.get("method_id")),
+            existing_cap_basis=_matching_existing_cap_basis(
+                rule, existing.method_rules_by_method.get(rule.get("method_id"), [])
+            ),
+        )
         if any(i.is_reject() for i in sem_issues):
             outcome.issues.extend(sem_issues)
             report.rule_outcomes.append(outcome)
@@ -961,7 +1225,28 @@ def run_validator(config: dict, client: RulesEngineClient, *, submit: bool = Tru
 
 def format_report(report: ValidationReport) -> str:
     lines: list[str] = []
-    lines.append(f"payment_methods written: {len(report.payment_methods_written)}")
+
+    outcomes = report.payment_method_outcomes
+    new_written = [o for o in outcomes if o.is_new and o.written]
+    existing_written = [o for o in outcomes if not o.is_new and o.written]
+    blocked = [o for o in outcomes if o.blocked_fields]
+    lines.append(
+        f"payment_methods: {len(new_written)} new, {len(existing_written)} existing updated, "
+        f"{len(blocked)} blocked (sensitive-field change on an existing method)."
+    )
+    # A per-field diff, not a bare count, for every existing row this
+    # batch actually touched — accepted or blocked (Fix 1's own
+    # requirement). A brand-new method has nothing to diff and is not
+    # listed here.
+    for o in outcomes:
+        if o.is_new or not o.diff:
+            continue
+        status = "BLOCKED — not written" if o.blocked_fields else "written"
+        lines.append(f"  payment_methods[{o.index}] ({o.id}) — {status}:")
+        for f, (old, new) in o.diff.items():
+            marker = "  [SENSITIVE FIELD — this row was not written]" if f in o.blocked_fields else ""
+            lines.append(f"    {f}: {old!r} -> {new!r}{marker}")
+
     if report.payment_method_issues:
         lines.append("payment_methods issues:")
         for i in report.payment_method_issues:

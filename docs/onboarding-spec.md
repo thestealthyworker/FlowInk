@@ -97,6 +97,18 @@ quirk), you need:
   full stop — see §5 for what to do next, which is **not** to write a
   plausible-looking source anyway.
 
+**The validator's citation check is a syntax check only — it does not
+verify anything.** It confirms a citation carries a real-looking
+`http(s)://` URL and is not a known placeholder host; it never fetches
+the URL, never confirms it resolves, and never confirms the page says
+what the rule claims. Passing that check means "this looks like a
+citation," not "this citation was verified" — the actual verification
+(does this URL really say what I'm claiming) is entirely on you, during
+research, before you write it down. Never represent a rule as "cited"
+or "sourced" to the user in a way that implies more than that; say what
+you actually did ("found in UOB's published T&C at this URL") rather
+than a word that could be read as "verified by the system."
+
 **A rule you cannot cite is not a rule you should quietly drop, either.**
 If you're confident a bonus category exists but can't pin the exact
 rate, still propose the rule with your best understanding, an empty
@@ -112,6 +124,16 @@ A single JSON document, one object per row you're proposing — this is
 close to a direct serialisation of the `payment_methods` /
 `method_rules` row shapes, deliberately: your job is to produce rows,
 not a different representation the validator has to reinterpret.
+
+The worked example below is for onboarding a brand-new card, so it
+populates every `payment_methods[]` field. **If you are instead
+proposing a change for a card that already exists, include `id` plus
+only the fields you are actually setting or changing — never every
+field you happen to know, and never a re-guessed value for a field you
+didn't mean to touch.** See §3's note below on why: for an existing
+row, restating a field with a value that drifts from what's on record
+reads as a proposed change to it, and three of these fields cannot be
+changed through this path at all.
 
 ```jsonc
 {
@@ -199,21 +221,54 @@ validator is the one thing with a database credential in this flow; you
 are not, and should not try to be.
 
 **`payment_methods` rows are not gated the way `method_rules` rows are,
-and that is a deliberate, disclosed scope boundary, not an oversight.**
-The identity fields above (issuer, last4, cycle day, currency, routing) are
-what the *user* told you directly in the interview — not an independent
-claim you researched and could be wrong about the way a reward rate can
-be — so the validator writes them straight through (idempotently, keyed
-on `id`) once they pass schema validation, without a review-queue step.
-Every `method_rules` row referencing that method still goes through the
+and that is a deliberate, disclosed scope boundary, not an oversight —
+but it only applies to a genuinely NEW method, and only to fields other
+than the anti-spoofing routing controls.** The identity fields above
+(issuer, last4, cycle day, currency, routing) are what the *user* told
+you directly in the interview — not an independent claim you researched
+and could be wrong about the way a reward rate can be — so for a
+`payment_methods[]` row whose `id` does not already exist, the validator
+writes it straight through (idempotently, keyed on `id`) once it passes
+schema validation, without a review-queue step.
+
+**For a row whose `id` already exists, this is narrower.** `last4`,
+`alert_senders`, and `statement_senders` are this app's anti-spoofing
+controls — the ingest pipeline reads them to decide whether an email is
+genuine (§6). The validator refuses to change any of them on an
+already-existing method through this path, full stop: it is not that
+you need a citation or higher confidence, it is that this path may
+never touch them once set. If research or the interview surfaces a
+change to one of these on a card you've already onboarded, say so
+plainly to the user and point them at `/config` — a human sets a
+routing domain on their own authority, an AI never does. Every other
+field on an existing row (`display_name`, `cycle_day`, `active`, and so
+on) still writes straight through the same as a new row, and
+`reward_type` on an existing row is never taken from your submission at
+all (see §4's note on this) — the validator uses the value already on
+record and treats a claimed change as its own finding, not a silent
+relabel.
+
+Every `method_rules` row referencing a method still goes through the
 full five-stage gate and `pending_review` regardless of how the method
 itself was created. As of this writing, the schema has no
 `submit_payment_method()`-style function analogous to `submit_method_rule()`
-— `0018_config_review.sql` only built that discipline for reward rules,
-where the actual risk this spec exists to manage lives. If that ever
-needs its own validated write path (a future work package, not this
-one), build it the same way: one function, one place status is decided,
-never a raw `INSERT` from more than one call site.
+— `0018_config_review.sql` only built that discipline for reward rules;
+the validator itself is what enforces the narrower rule above for
+payment methods, in Python, ahead of the write. If this ever needs its
+own validated write path (a future work package, not this one), build
+it the same way: one function, one place status is decided, never a
+raw `INSERT` from more than one call site.
+
+**When you're proposing a change for a card you already onboarded,
+submit only the fields you are actually setting or changing** — not a
+full restatement of every field you already know, and never a re-guess
+of a value (`reward_type` above all) just to "complete" the object.
+Restating a field you didn't mean to change, with a value that drifts
+even slightly from what's on record, reads to the validator as a
+proposed change to that field, and for the three protected fields above
+it blocks the entire row. The worked example in the next section is a
+brand-new card and therefore populates every field; an update to an
+existing one should carry `id` plus only the fields that changed.
 
 ## 4. Mapping research onto the rule primitives — and the unit trap
 
@@ -235,6 +290,18 @@ to — the engine does not know or care; only a human reading the output
 does. Get this wrong and every downstream figure is wrong by orders of
 magnitude, silently, because nothing in the schema stops a syntactically
 valid but nonsensical rate from being stored.
+
+**For a card that already exists, `reward_type` is not yours to set.**
+The validator uses the value already recorded in `payment_methods` for
+every `rate` plausibility check above, regardless of what this
+submission's `payment_methods[]` entry claims — a relabelled
+`reward_type` must never be able to walk an implausible `rate` past the
+check that exists to catch it. If you believe a card's reward
+programme genuinely changed, say so explicitly to the user rather than
+just emitting a different value; the validator surfaces a claimed
+change here as its own finding, it does not silently apply it. This
+only applies once a card has an existing row — a brand-new card has no
+recorded value yet, so your `reward_type` is all there is.
 
 - **`reward_type = 'cashback'`**: `rate` is a **fraction of spend**,
   strictly between 0 and 1. Eight percent cashback is `0.08`. It is
