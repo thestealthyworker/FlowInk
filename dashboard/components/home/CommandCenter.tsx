@@ -4,6 +4,7 @@ import { CcComparisonBars, type CcComparisonRow } from "@/components/home/comman
 import { CcDonut, type CcDonutSegment } from "@/components/home/command-center/CcDonut";
 import { CommandCenterKpiRow, type CommandCenterKpi } from "@/components/home/command-center/CommandCenterKpiRow";
 import { DailyHeatmap } from "@/components/home/DailyHeatmap";
+import { MonthSelector, type MonthOption } from "@/components/home/MonthSelector";
 import type { DailySpend } from "@/lib/data/dailySpend";
 import type { CategoryBarStatus } from "@/lib/derive/budgetSummary";
 
@@ -33,10 +34,18 @@ export interface CommandCenterCardTile {
   toneWord: string;
   tone: "good" | "warning" | "critical" | "neutral" | "ghost";
   headline: string;
+  // 0–1 progress toward the card's own cap or first gate (cardProgress,
+  // lib/derive/cardStatus.ts); null when the card has nothing to measure
+  // against, in which case the tile shows the tone dot alone.
+  fraction: number | null;
+  progressLabel: string | null;
 }
 
 export interface CommandCenterProps {
   monthLabel: string;
+  monthOptions: MonthOption[];
+  selectedMonth: string;
+  isCurrentMonth: boolean;
   topCategoryAside: string;
   kpis: CommandCenterKpi[];
   donutSegments: CcDonutSegment[];
@@ -67,7 +76,13 @@ const TALLY_SEGMENTS = 10;
 export function CommandCenter(props: CommandCenterProps) {
   return (
     <section id="command-center">
-      <div className="section-label">Command Center — {props.monthLabel}, month to date</div>
+      <div className="section-label section-label--with-control">
+        <span>
+          Command Center — {props.monthLabel}
+          {props.isCurrentMonth ? ", month to date" : " (closed month)"}
+        </span>
+        <MonthSelector months={props.monthOptions} selected={props.selectedMonth} />
+      </div>
 
       <div className="ledger-row">
         <p className="aside voice">{props.topCategoryAside}</p>
@@ -103,7 +118,7 @@ export function CommandCenter(props: CommandCenterProps) {
         <div className="cc-card cc-leader">
           <div className="cc-title">Top merchants — {props.monthLabel}</div>
           {props.miniLeaderboard.length === 0 ? (
-            <p>No merchant spend yet this month.</p>
+            <p>No merchant spend {props.isCurrentMonth ? "yet this month" : `in ${props.monthLabel}`}.</p>
           ) : (
             props.miniLeaderboard.map((row) => (
               <div key={row.name} className="cc-leader-row" tabIndex={0}>
@@ -133,25 +148,52 @@ export function CommandCenter(props: CommandCenterProps) {
         </div>
       )}
 
-      <div className="ledger-row">
-        <p className="aside voice">{props.cardAside}</p>
-        <div className="li-card-strip">
-          {props.cardTiles.map((tile) => (
-            <div key={tile.name} className="li-card-tile">
-              <div className="name">{tile.name}</div>
-              {tile.last4 && <div className="num-badge">••{tile.last4}</div>}
-              <div className="note">
-                <span className="status-dot" style={{ background: tile.tone === "ghost" || tile.tone === "neutral" ? "var(--color-ink-muted)" : `var(--color-${tile.tone})` }} />
-                {tile.headline}
-              </div>
-            </div>
-          ))}
+      {props.isCurrentMonth ? (
+        <div className="ledger-row">
+          <p className="aside voice">{props.cardAside}</p>
+          <div className="li-card-strip">
+            {props.cardTiles.map((tile) => (
+              <CardTile key={tile.name} tile={tile} />
+            ))}
+          </div>
+          <a href="/cards" className="li-card-tile__more" style={{ gridColumn: "1 / -1" }}>
+            View full card gauges →
+          </a>
         </div>
-        <a href="/cards" className="li-card-tile__more" style={{ gridColumn: "1 / -1" }}>
-          View full card gauges →
-        </a>
-      </div>
+      ) : (
+        // Card status tracks each card's own live statement/billing period,
+        // not a calendar month — showing it under a past month here would
+        // silently conflate the two period models this system keeps apart.
+        <div className="ledger-row">
+          <p className="aside voice">
+            Card gauges track live statement cycles, not calendar months, so they don&rsquo;t apply to a past month
+            view. <a href="/cards">See current card status →</a>
+          </p>
+        </div>
+      )}
     </section>
+  );
+}
+
+function CardTile({ tile }: { tile: CommandCenterCardTile }) {
+  return (
+    <div className="li-card-tile">
+      <div className="name">{tile.name}</div>
+      {tile.last4 && <div className="num-badge">••{tile.last4}</div>}
+      {tile.fraction !== null && (
+        <span
+          className="li-card-tile__track"
+          role="img"
+          aria-label={`${Math.round(tile.fraction * 100)}% of this period's ${tile.progressLabel ?? "ceiling"}`}
+        >
+          <span className="li-card-tile__fill" style={{ transform: `scaleX(${tile.fraction})` }} />
+        </span>
+      )}
+      <div className="note">
+        <span className="status-dot" style={{ background: tile.tone === "ghost" || tile.tone === "neutral" ? "var(--color-ink-muted)" : `var(--color-${tile.tone})` }} />
+        {tile.headline}
+      </div>
+    </div>
   );
 }
 

@@ -140,7 +140,7 @@ not a deploy. This is the single most load-bearing decision in the whole
 system, and it's what makes §6's generic rules engine possible at all.
 
 The current schema (see `supabase/migrations/0001_schema.sql` for the
-base tables and `0014`–`0017` for what's been added since):
+base tables and the later numbered migrations for what's been added since):
 
 ```
 payment_methods    one row per card/wallet/account. id, display_name,
@@ -177,6 +177,12 @@ transactions        the ledger. method_id, txn_date, merchant_raw,
 
 budgets             category, period ('2026-09' or 'default'),
                     monthly_cap, alert_at
+
+spend_smoothing     reporting overlay that spreads one lump-sum
+                    transaction across N months (transaction_id,
+                    label, start_month, months, is_subscription).
+                    Never modifies the transaction; the smoothed
+                    figure is always shown beside the raw one (0022)
 
 ingest_state        watermark per stream ('alerts', 'statements')
 

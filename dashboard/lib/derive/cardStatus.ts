@@ -1,5 +1,5 @@
 import { formatMoney } from "@/components/honest-data/MoneyFigure";
-import type { CardDashboardStatusRow, CardPeriodStatus } from "../supabase/types";
+import type { CardDashboardStatusRow, CardGate, CardPeriodStatus } from "../supabase/types";
 
 export type CardTone = "good" | "warning" | "critical" | "neutral" | "ghost";
 
@@ -63,6 +63,64 @@ export function summarizeCardStatus(status: CardPeriodStatus): CardSummary {
     return { headline, toneWord: "Cleared", tone: "good", daysLeft, atRisk: false };
   }
   return { headline, toneWord: "On track", tone: "neutral", daysLeft, atRisk: false };
+}
+
+export interface CardProgress {
+  kind: "cap" | "gate";
+  label: string; // "reward cap" | "spend cap" | "gate"
+  numerator: number;
+  denominator: number;
+  fraction: number; // numerator / denominator, clamped to 0–1
+  cleared: boolean;
+  gateKind: CardGate["kind"] | null;
+  currency: string;
+}
+
+/** One generic "how far toward this card's ceiling" reading, read only
+ * off fields the card_period_status() contract names — never a method_id.
+ * Shared by the Command Center's per-card rings and the card tiles'
+ * compact gauge so the two can never disagree. Prefers the card's own cap
+ * (whichever basis it uses), since that is the most legible ceiling a card
+ * offers; falls back to the first gate's progress; null for a card with
+ * neither, or one that is inactive, errored, or has no rules. */
+export function cardProgress(status: CardPeriodStatus): CardProgress | null {
+  if (status.active === false || status.error || status.has_rules === false) return null;
+  const currency = status.currency ?? "SGD";
+
+  const cap = status.cap;
+  if (cap && cap.amount > 0) {
+    const numerator = cap.basis === "reward" ? status.reward_accrued ?? 0 : cap.remaining !== null ? cap.amount - cap.remaining : 0;
+    return {
+      kind: "cap",
+      label: `${cap.basis} cap`,
+      numerator,
+      denominator: cap.amount,
+      fraction: clampFraction(numerator / cap.amount),
+      cleared: cap.exhausted,
+      gateKind: null,
+      currency,
+    };
+  }
+
+  const gate = (status.gates ?? [])[0];
+  if (gate && gate.required > 0) {
+    return {
+      kind: "gate",
+      label: "gate",
+      numerator: gate.actual,
+      denominator: gate.required,
+      fraction: gate.cleared ? 1 : clampFraction(gate.actual / gate.required),
+      cleared: gate.cleared,
+      gateKind: gate.kind,
+      currency,
+    };
+  }
+
+  return null;
+}
+
+function clampFraction(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 export interface CardWatch {

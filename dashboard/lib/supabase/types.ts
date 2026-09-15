@@ -98,6 +98,33 @@ export interface BudgetInput {
   alert_at?: number;
 }
 
+export interface SpendSmoothing {
+  id: number;
+  transaction_id: string;
+  label: string;
+  start_month: string; // 'YYYY-MM'
+  months: number;
+  is_subscription: boolean;
+  created_at: string;
+}
+
+export interface SpendSmoothingInput {
+  transaction_id: string;
+  label: string;
+  start_month: string;
+  months: number;
+  is_subscription: boolean;
+}
+
+/** listSpendSmoothing's shape — PostgREST embeds the related transaction
+ * via the real FK (transaction_id references transactions.id, 0022).
+ * `null` only if the source transaction is no longer readable — callers
+ * must skip a schedule with a null transaction rather than guess an
+ * amount for it. */
+export interface SpendSmoothingWithTransaction extends SpendSmoothing {
+  transaction: Pick<Transaction, "id" | "amount" | "currency" | "txn_date" | "merchant_raw" | "category" | "calendar_month"> | null;
+}
+
 export interface PaymentMethod {
   id: string;
   display_name: string;

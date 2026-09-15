@@ -88,6 +88,24 @@ export async function getTwelveMonthTrend(
     .sort((a, b) => a.calendar_month.localeCompare(b.calendar_month));
 }
 
+/** Every calendar month with at least one transaction, newest first —
+ * backs the home view's month selector. Reads the
+ * transaction_calendar_months view (0021), which de-duplicates in
+ * Postgres: selecting calendar_month straight from transactions would be
+ * cut off at PostgREST's max-rows limit once the ledger grows past it,
+ * silently dropping older months from the selector. Counts every row,
+ * transfers and reconciled statement rows included — presence, not a
+ * spend total. */
+export async function getAvailableCalendarMonths(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("transaction_calendar_months")
+    .select("calendar_month")
+    .order("calendar_month", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as Array<{ calendar_month: string }>).map((row) => row.calendar_month);
+}
+
 export interface MethodSplit {
   method_id: string;
   total: number;

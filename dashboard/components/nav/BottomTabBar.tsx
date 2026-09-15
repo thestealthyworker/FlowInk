@@ -19,6 +19,7 @@ const ADD_GROUP = [
   { href: "/budgets", label: "Budgets" },
   { href: "/transactions/new", label: "Add manual entry" },
   { href: "/triage", label: "Merchant triage" },
+  { href: "/subscriptions", label: "Subscriptions" },
   { href: "/config", label: "Cards & rules" },
 ] as const;
 
