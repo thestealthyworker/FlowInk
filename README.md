@@ -15,13 +15,38 @@ Card rules (rates, tiers, caps) live in the database as data, not code —
 a rate change is an `UPDATE`, not a deploy. That's what lets this repo
 ship generically: the schema and rules engine don't know or care which
 country your cards are from. It ships with a complete worked example for
-four Singapore cards and wallets, encoded as a demonstration of the
-pattern, not as the limit of what it supports.
+four Singapore payment methods — three credit cards with reward rules and
+one wallet with none — encoded as a demonstration of the pattern, not as
+the limit of what it supports. The dashboard's one-click example loader
+adds the three cards.
 
 **Standalone.** No VPS, no always-on server, no third-party automation
 platform. Everything runs either inside Supabase (a hosted Postgres
 provider) or in a GitHub Actions runner, both of which have usable free
 tiers.
+
+## Read this first
+
+**Not financial advice.** FlowInk shows reward progress computed from
+rules you enter (or that an AI assistant proposes and you approve). Card
+issuers change rates, caps and terms without notice, and the Singapore
+example is a point-in-time snapshot, verified August 2026. Check your
+issuer's current terms before acting on any number this app shows. The
+software comes with no warranty — see [LICENSE](LICENSE).
+
+**Maintenance status.** FlowInk is maintained for its author's own use
+and published so others can self-host it. Issues and pull requests are
+welcome but handled on a best-effort basis, with no response-time
+commitment. Gmail, Supabase, Anthropic and bank email formats all change
+over time; expect to fix things yourself occasionally.
+
+**Your deployment holds your financial data.** With the optional
+integrations enabled, your deployment stores a read-only Gmail token and
+your statement PDF passwords, and sends the text of your bank alert
+emails to Anthropic's API for parsing. Follow every verification step in
+the setup guides — especially disabling public sign-up and registering
+the operator account — because those steps are what keep that data
+private.
 
 ## Architecture, in brief
 
@@ -158,3 +183,13 @@ See [`docs/architecture.md`](docs/architecture.md)'s security-model
 section for the full reasoning behind this split, and the RLS/grants
 model that's the actual line of defence around your data (not the
 secrecy of these values — the Vercel-facing two are meant to be public).
+
+## License
+
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0). You can
+use, modify and self-host FlowInk freely. If you modify it and let other
+people use your modified version over a network — for example, running
+it as a hosted service — you must offer those users its complete source
+code under the same license. Copies obtained before this repository
+switched to AGPL-3.0 remain available under the MIT terms they were
+published with.

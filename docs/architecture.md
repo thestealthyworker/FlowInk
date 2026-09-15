@@ -2,8 +2,8 @@
 
 This is the durable design document: what FlowInk is, how it is put
 together, and why — independent of which specific cards you hold. It used
-to live combined with a Singapore worked example in one file
-(`docs/cardledger-build-spec.md`); that file has been split in two. This
+to live combined with a Singapore worked example in a single build spec
+(no longer in this repo); that file has been split in two. This
 document is the generic half. The other half —
 [`docs/reference-example-sg.md`](reference-example-sg.md) — is a complete
 worked example (four Singapore cards and wallets, their reward mechanics,

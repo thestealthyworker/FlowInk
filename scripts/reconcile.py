@@ -375,15 +375,10 @@ def main() -> int:
         # This is JOB-3's most important health metric (§7); it must keep
         # reaching the operator now that Telegram is gone (see
         # docs/architecture.md §2).
-        # NOTE: the message text below still cites the retired
-        # docs/cardledger-build-spec.md §13 item 1 — left as-is since it's
-        # a log message sent to healthchecks.io, not a comment; fixing it
-        # is a text change to runtime output, out of scope for a
-        # comments-only cleanup.
         escalate_log(
             f"reconcile miss rate {miss_rate:.1%}: {unmatched_statement_this_run}/{total_statement_this_run} "
             "statement transactions from this run had no matching alert. Alert thresholds probably need "
-            "lowering further — see docs/cardledger-build-spec.md §13 item 1."
+            "lowering further in each bank's transaction-alert settings."
         )
 
     return 0
@@ -393,9 +388,9 @@ def run() -> int:
     """Runs reconcile, translating a hard failure into a healthchecks.io
     `/fail` ping (an immediate alert email) before the failure propagates,
     rather than letting it disappear the way the old `send_telegram()`'s
-    silent no-op on unset env vars did (docs/SETUP_STATUS.md "known loose
-    ends"). The exception is re-raised so it still fails the GitHub Actions
-    run loudly — the ping supplements that, it does not replace it.
+    silent no-op on unset env vars did. The exception is re-raised so it
+    still fails the GitHub Actions run loudly — the ping supplements that,
+    it does not replace it.
     """
     try:
         return main()

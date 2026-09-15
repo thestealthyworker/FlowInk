@@ -90,11 +90,13 @@ loads and why). A **"Clear example data"** button in the same place
 removes only that example data later, whenever you're ready to configure
 your own cards instead.
 
-The remaining setup — routing bank alerts to the right rules, tuning card
-thresholds, anything specific to *your* cards rather than to the
-infrastructure — is covered separately. That guide isn't part of this
-document set; if it isn't in `docs/` yet in your checkout, it's still in
-progress upstream.
+The remaining setup — encoding *your* cards and their reward rules rather
+than the infrastructure — is covered by
+[`docs/onboarding-spec.md`](onboarding-spec.md). It's written for an AI
+coding assistant to follow on your behalf: the assistant researches your
+cards' published terms, emits a config that
+`scripts/validate_ai_config.py` checks, and every rule it proposes waits
+at `/config` until you approve it.
 
 ## If you get stuck
 

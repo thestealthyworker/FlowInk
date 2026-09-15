@@ -17,8 +17,9 @@ sign-up form), and this dashboard never creates accounts as a side effect
 of anything. RLS-scoped reads/writes go through `@supabase/ssr`. Pages
 cover budgets, card status and reward-tier tracking, manual (non-card)
 transaction entry, the merchant triage table, and the payment-method /
-rule config surface. Visual design is intentionally plain, unstyled,
-semantic HTML throughout — there has not been a dedicated design pass.
+rule config surface. Styling is plain CSS split by surface under
+`app/styles/`, with shared design tokens in `app/styles/tokens.css`, and
+supports both light and dark themes (`components/theme/ThemeToggle.tsx`).
 
 ## Env vars — the complete list, ever
 

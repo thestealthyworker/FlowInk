@@ -47,7 +47,7 @@ note() { printf '\n>> %s\n' "$1"; }
 # ---------------------------------------------------------------------------
 # 1. Secrets we can generate ourselves.
 #
-# SETUP_STATUS.md previously told the operator to invent this by hand. A
+# An earlier setup doc previously told the operator to invent this by hand. A
 # human-chosen string is the wrong default for a value guarding an
 # internet-reachable endpoint whose only other control is a shared-secret
 # compare.
@@ -121,7 +121,7 @@ if [ "$consent_status" -ne 0 ]; then
   note "Gmail consent step failed (exit $consent_status). The real error, from Google or the script, is:"
   sed -e 's/[A-Za-z0-9_-]\{40,\}/<redacted>/g' "$consent_stderr_file" >&2
   rm -f "$consent_stderr_file"
-  die "Aborting on the error above — diagnose that, don't just re-run. See docs/SETUP_STATUS.md."
+  die "Aborting on the error above — diagnose that, don't just re-run. See docs/setup/gmail.md."
 fi
 rm -f "$consent_stderr_file"
 
