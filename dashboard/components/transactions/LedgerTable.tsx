@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GuessedCategoryLabel } from "@/components/honest-data/GuessedCategoryLabel";
 import { formatMoney } from "@/components/honest-data/MoneyFigure";
 import { ProvisionalAmount } from "@/components/honest-data/ProvisionalAmount";
@@ -8,6 +9,7 @@ import { categoryColorVar } from "@/lib/derive/seriesColor";
 export interface LedgerTableProps {
   rows: LedgerRow[];
   guessedIds: Set<number>;
+  smoothedIds: Set<string>;
 }
 
 // Ported to the artifact's date-grouped .li-date-group/.li-tx-row markup
@@ -15,7 +17,7 @@ export interface LedgerTableProps {
 // no badge, provisional is italic+dashed, FX-pending shows the original
 // currency). No visible sort control — the artifact has none; default sort
 // stays date-desc (set by the caller's data fetch), matching it exactly.
-export function LedgerTable({ rows, guessedIds }: LedgerTableProps) {
+export function LedgerTable({ rows, guessedIds, smoothedIds }: LedgerTableProps) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
@@ -32,7 +34,7 @@ export function LedgerTable({ rows, guessedIds }: LedgerTableProps) {
         <div key={group.dateHeading} className="li-date-group">
           <div className="li-date-heading">{group.dateHeading}</div>
           {group.rows.map((row) => (
-            <LedgerTxRow key={row.id} row={row} guessedIds={guessedIds} />
+            <LedgerTxRow key={row.id} row={row} guessedIds={guessedIds} isSmoothed={smoothedIds.has(row.id)} />
           ))}
         </div>
       ))}
@@ -40,7 +42,7 @@ export function LedgerTable({ rows, guessedIds }: LedgerTableProps) {
   );
 }
 
-function LedgerTxRow({ row, guessedIds }: { row: LedgerRow; guessedIds: Set<number> }) {
+function LedgerTxRow({ row, guessedIds, isSmoothed }: { row: LedgerRow; guessedIds: Set<number>; isSmoothed: boolean }) {
   const isFxPending = row.currency !== "SGD";
   const isGuessedMerchant = row.merchant_id !== null && guessedIds.has(row.merchant_id);
   const day = new Date(`${row.txn_date}T00:00:00`).getDate();
@@ -67,6 +69,19 @@ function LedgerTxRow({ row, guessedIds }: { row: LedgerRow; guessedIds: Set<numb
       <span className={`status${isFxPending ? " fx" : row.status === "provisional" ? " provisional" : row.status === "disputed" ? " fx" : " confirmed"}`}>
         {isFxPending ? "FX Pending" : row.status === "provisional" ? "Provisional" : row.status === "disputed" ? "Disputed" : "Confirmed"}
       </span>
+      {/* Always visible, not hover-revealed: outlined until a transaction is
+          smoothed, filled once it is (subscriptions.css .sub-flag-btn). */}
+      <Link
+        href={`/subscriptions?transaction=${row.id}`}
+        className={`sub-flag-btn${isSmoothed ? " is-flagged" : ""}`}
+        title={isSmoothed ? "Already smoothed — view or edit" : "Smooth across months / flag as subscription"}
+        aria-label={isSmoothed ? `${row.merchant_display} is smoothed across months — view or edit` : `Smooth ${row.merchant_display} across months`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 3v7l9 9 8-8-9-9H3z" />
+          <circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      </Link>
     </div>
   );
 }

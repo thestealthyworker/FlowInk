@@ -32,6 +32,18 @@
   background: var(--color-hairline);
 }
 
+/* Command Center only — the month picker sits between the label text and
+   the trailing rule (the rule's flex: 1 still fills whatever's left).
+   Normal case/weight/spacing on purpose: it's a real control, not part of
+   the uppercase label typography. */
+.section-label--with-control .month-selector select {
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-ink);
+  padding: var(--space-1) var(--space-2);
+}
+
 /* ---- ledger-row: a rule-column margin carries a narrative aside beside
    the numerals it annotates ---- */
 .ledger-row {
@@ -65,7 +77,11 @@
 /* ---- KPI row ---- */
 .li-kpi-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit rather than a fixed repeat(4, 1fr): the smoothed-spend KPI
+     only appears once a lump sum is smoothed into the month, so this row
+     is sometimes 4 cards and sometimes 5 — minmax keeps each card a sane
+     width either way instead of stranding a lone 5th card on its own row. */
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: var(--space-6);
 }
 
@@ -313,6 +329,36 @@
   height: 7px;
   border-radius: 50%;
   margin-right: var(--space-2);
+}
+
+/* Compact proportional gauge on each card tile — the status dot alone
+   reads as a fixed colour with no sense of "how much". Same cap-then-
+   first-gate reading as the Command Center rings (cardProgress,
+   lib/derive/cardStatus.ts), so a tile and its ring never disagree. Only
+   rendered when a card has a ceiling to measure against. The fill scales
+   on transform (not width) so any change animates on the compositor. */
+.li-card-tile__track {
+  display: block;
+  position: relative;
+  height: 0.375rem;
+  margin-top: 0.55rem;
+  background: var(--color-surface-sunk);
+  border-radius: var(--radius-bar);
+  overflow: hidden;
+}
+
+.li-card-tile__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-accent);
+  transform-origin: left center;
+  transition: transform var(--duration-normal) var(--ease-out-expo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .li-card-tile__fill {
+    transition: none;
+  }
 }
 
 .li-card-tile__more {
@@ -858,8 +904,13 @@
   grid-template-columns: 2.6rem 1fr 7.5rem 5.5rem 6rem 7.5rem;
   align-items: center;
   gap: var(--space-3);
-  padding: 0.6rem 0;
+  padding: 0.6rem 2.1rem 0.6rem 0;
   border-bottom: 1px solid var(--color-hairline);
+  /* The right padding reserves room for the smoothing icon
+     (subscriptions.css .sub-flag-btn), positioned absolutely rather than as
+     a grid column so it can't interact with the mobile
+     grid-template-areas redefinition below. */
+  position: relative;
 }
 
 @media (max-width: 900px) {

@@ -18,6 +18,33 @@ function parseCalendarMonth(calendarMonth: string): { year: number; month: numbe
   return { year: year ?? 1970, month: month ?? 1 };
 }
 
+/** `calendarMonth` shifted by `delta` months (negative shifts back) —
+ * e.g. `addCalendarMonths("2026-11", 2) === "2027-01"`. Used by spend
+ * smoothing to find a schedule's end month (start + months - 1). */
+export function addCalendarMonths(calendarMonth: string, delta: number): string {
+  const { year, month } = parseCalendarMonth(calendarMonth);
+  const d = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Whole months from `a` to `b` (positive if `b` is later) — e.g.
+ * `calendarMonthsBetween("2026-08", "2026-11") === 3`. Used to compute
+ * "N months until this subscription ends." */
+export function calendarMonthsBetween(a: string, b: string): number {
+  const pa = parseCalendarMonth(a);
+  const pb = parseCalendarMonth(b);
+  return (pb.year - pa.year) * 12 + (pb.month - pa.month);
+}
+
+/** True if `calendarMonth` falls within a schedule that starts at
+ * `startMonth` and spans `months` consecutive months. 'YYYY-MM' compares
+ * lexically the same as chronologically, so plain string comparison
+ * against the computed end month is exact. */
+export function calendarMonthWithinRange(calendarMonth: string, startMonth: string, months: number): boolean {
+  const endMonth = addCalendarMonths(startMonth, months - 1);
+  return calendarMonth >= startMonth && calendarMonth <= endMonth;
+}
+
 /** Number of calendar days in a 'YYYY-MM' month. */
 export function daysInCalendarMonth(calendarMonth: string): number {
   const { year, month } = parseCalendarMonth(calendarMonth);

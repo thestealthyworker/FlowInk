@@ -9,10 +9,11 @@ import { usePathname } from "next/navigation";
 // linked sections (Command Center / Trends / Ledger, operator: "can the
 // command center/trends/Ledger be in the same page as per the artifact"),
 // not three separate routes. Cards is reachable from the Command Center's
-// card-strip section instead of a top-level tab. The three write/entry
-// features (budgets, manual entry, triage) are real separate pages,
-// collapsed into one "Add" disclosure so they don't crowd the bar — a
-// native <details>, no client state needed for the dropdown itself.
+// card-strip section instead of a top-level tab. The write/entry features
+// (budgets, manual entry, triage, subscriptions, card config) are real
+// separate pages, collapsed into one "Add" disclosure so they don't crowd
+// the bar — a native <details>, no client state needed for the dropdown
+// itself.
 const PRIMARY = [
   { href: "/", label: "Command Center" },
   { href: "/#trends", label: "Trends" },
@@ -23,6 +24,7 @@ const ADD_GROUP = [
   { href: "/budgets", label: "Budgets" },
   { href: "/transactions/new", label: "Add manual entry" },
   { href: "/triage", label: "Merchant triage" },
+  { href: "/subscriptions", label: "Subscriptions" },
   { href: "/config", label: "Cards & rules" },
 ] as const;
 

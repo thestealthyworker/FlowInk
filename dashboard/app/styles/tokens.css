@@ -94,6 +94,10 @@
   /* ---- soft ledger-card shadow, replacing the old hard offset ---- */
   --shadow-hero: 0 1px 0 var(--color-hairline), 0 6px 16px oklch(20% 0.02 45 / 0.08);
   --shadow-overlay: 0 16px 40px oklch(20% 0.02 45 / 0.24);
+
+  /* ---- compact-layout floors (subscriptions list, below 640px) ---- */
+  --text-mobile-min: 0.875rem; /* 14px legibility floor for compact chips/meta */
+  --tap-target-min: 2.75rem; /* 44px minimum hit area for icon-only controls */
 }
 
 @media (prefers-color-scheme: dark) {

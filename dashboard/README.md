@@ -16,8 +16,8 @@ created by hand in Supabase Studio, never through this UI (there is no
 sign-up form), and this dashboard never creates accounts as a side effect
 of anything. RLS-scoped reads/writes go through `@supabase/ssr`. Pages
 cover budgets, card status and reward-tier tracking, manual (non-card)
-transaction entry, the merchant triage table, and the payment-method /
-rule config surface. Styling is plain CSS split by surface under
+transaction entry, the merchant triage table, spend smoothing and
+subscription tracking, and the payment-method / rule config surface. Styling is plain CSS split by surface under
 `app/styles/`, with shared design tokens in `app/styles/tokens.css`, and
 supports both light and dark themes (`components/theme/ThemeToggle.tsx`).
 
@@ -76,7 +76,9 @@ or export them in the shell/CI) before building.
 - `app/(protected)/` — every page behind the auth gate: `/` (this-month
   proof-of-read view), `/budgets`, `/cards` and `/cards/tier-3` (reward
   tracking), `/config` (payment methods, rule review, the example-data
-  loader), `/transactions/new`, `/triage`.
+  loader), `/transactions/new`, `/triage`, `/subscriptions` (spread a
+  lump-sum payment across months, and track subscriptions' end dates).
+  The Command Center at `/` takes `?month=YYYY-MM` to view a past month.
 - `app/login` — the only route `middleware.ts`'s `PUBLIC_PATHS` treats as
   public. There is no `app/auth/callback` route (or any other public
   route) in this dashboard.

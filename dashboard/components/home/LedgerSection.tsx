@@ -9,6 +9,7 @@ export interface LedgerSectionProps {
   total: number;
   facets: LedgerFacets;
   guessedIds: Set<number>;
+  smoothedIds: Set<string>;
   currentParams: LedgerQueryParams;
   filterValues: LedgerFilterValues;
   pageNum: number;
@@ -26,6 +27,7 @@ export function LedgerSection({
   total,
   facets,
   guessedIds,
+  smoothedIds,
   currentParams,
   filterValues,
   pageNum,
@@ -49,7 +51,7 @@ export function LedgerSection({
         Showing {rangeStart}–{rangeEnd} of {total} transaction{total === 1 ? "" : "s"}
       </p>
 
-      <LedgerTable rows={rows} guessedIds={guessedIds} />
+      <LedgerTable rows={rows} guessedIds={guessedIds} smoothedIds={smoothedIds} />
 
       {totalPages > 1 && (
         <nav className="li-ledger-pagination" aria-label="Ledger pages">
